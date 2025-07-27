@@ -11,7 +11,7 @@ from llm_setup import act_gpt4_test
 # NOTE: the bid/offer terminology is very specific to finance, but maybe that is good
 
 # experiment parameters
-N_ROUNDS = 1
+N_ROUNDS = 2
 N_ITER = 3
 
 
@@ -55,16 +55,18 @@ class Buyer(Agent):
 
     instructions = f"""
     You are a buyer. Your task is to buy a unit of good at the lowest possible price, 
-    but no higher than your reservation price. There will be {N_ROUNDS} trading days.
-    Your reservation price will be revealed to you, and only you, at the start of each trading day.
+    but no higher than your reservation price. There will be {N_ROUNDS} rounds.
+    Your reservation price will be revealed to you, and only you, at the start.
     Under no condition can you buy above your reservation price. 
     However, buying at a price equal to your reservation price is perfectly acceptable and preferred than not buying at all.
     
-    There are 11 sellers and 10 other buyers in the room.
+    There are 11 sellers and 11 buyers (including you) in the room.
     Any buyer or seller is free at any time to raise his hand and make a verbal offer to buy/sell.
-    Any buyer or seller is free to accept anb in th offer, in whicand h case a binding contract has been formed, the transaction occurs and the buyer and seller drop out of the market (no longer permitted to do anything for the remainder of that trading day).
+    Any buyer or seller is free to accept anb in th offer, in whicand h case a binding contract has been formed, the transaction occurs and the buyer and seller drop out of the market (no longer permitted to do anything for the remainder of that ronud).
 
-    Each trading day, a maximum of {N_ITER} transactions can be made.
+    Each round, you want to buy an additional unit of the good and are able to 
+    participate in the market irrespective of whether you transacted during the previous day.
+    Each round, a maximum of {N_ITER} transactions can be made.
     \n
     """    
 
@@ -72,19 +74,21 @@ class Buyer(Agent):
         super().__init__(id, reservation_price)
 
     def respond(self, price: float, history: str, round: int, iteration: int) -> bool:
-        prompt = self.instructions + history + f"This is round {round}/{N_ROUNDS} iteration {iteration}/{N_ITER}. Your reservation price is {self._reservation_price}. Someone is offering to sell at ${price:.2f}. Do you buy? Only answer with a yes or no."
+        prompt = self.instructions + f"Your reservation price is {self._reservation_price}." + history + f"This is round {round}/{N_ROUNDS} iteration {iteration}/{N_ITER}. Someone is offering to sell at ${price:.2f}. Do you buy? Only answer with a yes or no."
         # call the LLM with the prompt and get the response
-        print(f"Buyer with id {id} calling the LLM with the prompt: \n{prompt}")
+        print(f"Buyer with id {self._id} calling the LLM with the prompt: \n{prompt}")
         response_text = act_gpt4_test(prompt)
+        print(f"LLM response: {response_text}")
         response = extract_response(response_text)
         return response
         
     def announce(self, history: str, round: int, iteration: int) -> float:
-        prompt = self.instructions + history + f"This is round {round}/{N_ROUNDS} iteration {iteration}/{N_ITER}. Your reservation price is {self._reservation_price}. Do you want to announce a bid to buy? If so, what is your bid price? Answer only with a number."
+        prompt = self.instructions + f"Your reservation price is {self._reservation_price}." + history + f"This is round {round}/{N_ROUNDS} iteration {iteration}/{N_ITER}. Do you want to announce a bid to buy? If so, what is your bid price? Answer only with a number."
         # call the LLM with the prompt and get the response
         print(prompt)
-        print(f"Buyer with id {id} calling the LLM with the prompt: \n{prompt}")
+        print(f"Buyer with id {self._id} calling the LLM with the prompt: \n{prompt}")
         announcement_text = act_gpt4_test(prompt)
+        print(f"LLM reponse: {announcement_text}")
         price = extract_price(announcement_text)
         return price
     
@@ -93,18 +97,18 @@ class Seller(Agent):
 
     instructions = f"""
     You are a seller. Your task is to sell a unit of your good at the highest possible price, 
-    but no lower than your reservation price. There will be {N_ROUNDS} trading days.
-    Your reservation price will be revealed to you, and only you, at the start of each trading day.
+    but no lower than your reservation price. There will be {N_ROUNDS} rounds.
+    Your reservation price will be revealed to you, and only you, at the start.
     Under no condition can you sell below your reservation price. 
     However, selling at a price equal to your reservation price is perfectly acceptable and preferred than not selling at all.
     
-    There are 11 buyers and 10 other sellers in the room.
+    There are 11 buyers and 11 sellers (including you) in the room.
     Any buyer or seller is free at any time to raise his hand and make a verbal offer to buy/sell.
-    Any buyer or seller is free to accept an offer, in whicand h case a binding contract has been formed, the transaction occurs and the buyer and seller drop out of the market (no longer permitted to do anything for the remainder of that trading day).
+    Any buyer or seller is free to accept an offer, in whicand h case a binding contract has been formed, the transaction occurs and the buyer and seller drop out of the market (no longer permitted to do anything for the remainder of that round).
 
-    Each trading day, you receive an additional unit of good and are able to 
+    Each round, you receive an additional unit of the good and are able to 
     participate in the market irrespective of whether you transacted during the previous day.
-    Each trading day, a maximum of {N_ITER} transactions can be made. You can only make one transaction.
+    Each round, a maximum of {N_ITER} transactions can be made. You can only make one transaction.
     \n
     """
 
@@ -112,18 +116,20 @@ class Seller(Agent):
         super().__init__(id, reservation_price)
 
     def respond(self, price: float, history: str, round: int, iteration: int) -> bool:
-        prompt = self.instructions + history + f"This is round {round}/{N_ROUNDS} iteration {iteration}/{N_ITER}. You are a Seller. Your reservation price is {self._reservation_price}. Someone is offering to buy at ${price:.2f}. Do you sell? Only answer with a yes or no."
+        prompt = self.instructions + f"Your reservation price is {self._reservation_price}." + history + f"This is round {round}/{N_ROUNDS} iteration {iteration}/{N_ITER}. Someone is offering to buy at ${price:.2f}. Do you sell? Only answer with a yes or no."
         # call the LLM with the prompt and get the response
-        print(f"Seller with id {id} calling the LLM with the prompt: \n{prompt}")
+        print(f"Seller with id {self._id} calling the LLM with the prompt: \n{prompt}")
         response_text = act_gpt4_test(prompt)
+        print(f"LLM response: {response_text}")
         response = extract_response(response_text)
         return response
     
     def announce(self, history: str, round: int, iteration: int) -> float:
-        prompt = self.instructions + history + f"This is round {round}/{N_ROUNDS} iteration {iteration}/{N_ITER}. Your reservation price is {self._reservation_price}. Do you want to announce an offer to sell? If so, what is your asking price? Answer only with a number."
+        prompt = self.instructions + f"Your reservation price is {self._reservation_price}." + history + f"This is round {round}/{N_ROUNDS} iteration {iteration}/{N_ITER}. Do you want to announce an offer to sell? If so, what is your asking price? Answer only with a number."
         # call the LLM with the prompt and extract the response price
-        print(f"Seller with id {id} calling the LLM with the prompt: \n{prompt}")
+        print(f"Seller with id {self._id} calling the LLM with the prompt: \n{prompt}")
         announcement_text = act_gpt4_test(prompt)
+        print(f"LLM reponse: {announcement_text}")
         price = extract_price(announcement_text)
         return price
 
@@ -146,7 +152,7 @@ def main():
         agents.append(Seller(id, res_price))
 
     # intitialise a dataframe to record the results
-    df_data = pd.DataFrame(columns=['iteration', 'price', 'announcement', 
+    df_data = pd.DataFrame(columns=['round', 'iteration', 'price', 'announcement', 
                                     'transaction', 'announcement_type'])
 
     # conduct each round of the expeirment seqeuentially
@@ -185,8 +191,8 @@ def main():
                             if response:
                                 # record and remove the dealing agents
                                 print(f"An announcement to {announcement_type} for ${price} was accepted by agent {agent._id} at iteration {iteration}.")
-                                remaining_agents.pop(i)
-                                remaining_agents.pop(j)
+                                for idx in sorted([i, j], reverse=True):
+                                    del remaining_agents[idx]
                                 transaction_made = True
                                 break
             
@@ -203,13 +209,19 @@ def main():
                 history += f"In round {round} at iteration {iteration}, no announcement was made.\n"
 
             # store the data from the current iteration
-            df_data.loc[iteration] = [iteration, price, announcement_made, 
-                                    transaction_made, announcement_type]
+            data_iter = {'round': [round], 'iteration': [iteration], 'price': [price],
+                         'announcement': [announcement_made], 
+                         'transaction': [transaction_made],
+                         'announcement_type': [announcement_type]}
+            df_data = pd.concat([df_data, pd.DataFrame(data=data_iter)], 
+                                ignore_index=True)
 
     # save the results to CSV
-    output_filename = Path(__file__).parent.resolve() / "results/experiment_1.csv"
+    output_filename = Path(__file__).parent.resolve() / "results/experiment_2.csv"
     df_data.to_csv(output_filename)
-
+    #TODO: you can record how much profit the participants made and how traded or not
+    #TODO: need to check if the agents are not bidding above or asking below their reservation price
+    
     print("All done.")
     print("Exit.")  
         

@@ -17,10 +17,11 @@ df_data = pd.read_csv(results_path/f'experiment_{EXPERIMENT_ID}.csv', index_col=
 
 # plot the offer prices
 plt.figure(figsize=(10, 5))
-sns.scatterplot(x=df_data.index, y='price', marker='x', data=df_data)
+sns.lineplot(x=df_data.index, y='price', markers='0', data=df_data)
 plt.axhline(y=2, color='red', linestyle='--')
-for x in [5, 10, 15, 20]:
-    plt.axvline(x=x-0.5, color='grey', linestyle='--', linewidth=1.5)
+last_indices_in_round = df_data.groupby('round')['iteration'].apply(lambda g: g.index.max())
+for x in last_indices_in_round[:-1]:
+    plt.axvline(x=x+0.5, color='grey', linestyle='--', linewidth=1.5)
 plt.xticks(ticks=df_data.index, labels=df_data['iteration'], rotation=0)
 plt.title('Offer price at each iteration')
 plt.xlabel('Iteration')
@@ -32,7 +33,7 @@ plt.savefig(figures_path/f'offer_prices_{EXPERIMENT_ID}.png', dpi=300, bbox_inch
 # plot the transaction prices
 df_plot = df_data.loc[df_data['transaction']==True].reset_index()
 plt.figure(figsize=(10, 5))
-sns.scatterplot(x=df_plot.index, y='price', marker='x', 
+sns.lineplot(x=df_plot.index, y='price', markers='x', 
                 data=df_plot)
 plt.axhline(y=2, color='red', linestyle='--')
 last_indices_in_round = df_plot.groupby('round')['iteration'].apply(lambda g: g.index.max())

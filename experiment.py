@@ -5,14 +5,24 @@ import pandas as pd
 import numpy as np
 import re
 import os
+import logging
 
 from llm_setup import act_gpt4_test
 
 # NOTE: the bid/offer terminology is very specific to finance, but maybe that is good
 
+EXPERIMENT_ID = 4
+
 # experiment parameters
 N_ROUNDS = 5
 N_ITER = 5
+
+# configure the logger
+logging.basicConfig(
+    filename=Path(__file__).parent.resolve() / f"logs/experiment_{EXPERIMENT_ID}.log",
+    filemode='w',                   
+    level=logging.INFO
+    )
 
 
 def extract_price(text: str) -> float:
@@ -76,19 +86,18 @@ class Buyer(Agent):
     def respond(self, price: float, history: str, round: int, iteration: int) -> bool:
         prompt = self.instructions + f"Your reservation price is {self._reservation_price}.\n" + history + f"This is round {round}/{N_ROUNDS} iteration {iteration}/{N_ITER}. Someone is offering to sell at ${price:.2f}. Do you buy? Only answer with a yes or no."
         # call the LLM with the prompt and get the response
-        print(f"Buyer with id {self._id} calling the LLM with the prompt: \n{prompt}")
+        logging.info(f"Buyer with id {self._id} calling the LLM with the prompt: \n{prompt}")
         response_text = act_gpt4_test(prompt)
-        print(f"LLM response: {response_text}")
+        logging.info(f"LLM response: {response_text}")
         response = extract_response(response_text)
         return response
         
     def announce(self, history: str, round: int, iteration: int) -> float:
         prompt = self.instructions + f"Your reservation price is {self._reservation_price}.\n" + history + f"This is round {round}/{N_ROUNDS} iteration {iteration}/{N_ITER}. Do you want to announce a bid to buy? If so, what is your bid price? Answer only with a number."
         # call the LLM with the prompt and get the response
-        print(prompt)
-        print(f"Buyer with id {self._id} calling the LLM with the prompt: \n{prompt}")
+        logging.info(f"Buyer with id {self._id} calling the LLM with the prompt: \n{prompt}")
         announcement_text = act_gpt4_test(prompt)
-        print(f"LLM reponse: {announcement_text}")
+        logging.info(f"LLM reponse: {announcement_text}")
         price = extract_price(announcement_text)
         return price
     
@@ -118,22 +127,21 @@ class Seller(Agent):
     def respond(self, price: float, history: str, round: int, iteration: int) -> bool:
         prompt = self.instructions + f"Your reservation price is {self._reservation_price}.\n" + history + f"This is round {round}/{N_ROUNDS} iteration {iteration}/{N_ITER}. Someone is offering to buy at ${price:.2f}. Do you sell? Only answer with a yes or no."
         # call the LLM with the prompt and get the response
-        print(f"Seller with id {self._id} calling the LLM with the prompt: \n{prompt}")
+        logging.info(f"Seller with id {self._id} calling the LLM with the prompt: \n{prompt}")
         response_text = act_gpt4_test(prompt)
-        print(f"LLM response: {response_text}")
+        logging.info(f"LLM response: {response_text}")
         response = extract_response(response_text)
         return response
     
     def announce(self, history: str, round: int, iteration: int) -> float:
         prompt = self.instructions + f"Your reservation price is {self._reservation_price}.\n" + history + f"This is round {round}/{N_ROUNDS} iteration {iteration}/{N_ITER}. Do you want to announce an offer to sell? If so, what is your asking price? Answer only with a number."
         # call the LLM with the prompt and extract the response price
-        print(f"Seller with id {self._id} calling the LLM with the prompt: \n{prompt}")
+        logging.info(f"Seller with id {self._id} calling the LLM with the prompt: \n{prompt}")
         announcement_text = act_gpt4_test(prompt)
-        print(f"LLM reponse: {announcement_text}")
+        logging.info(f"LLM reponse: {announcement_text}")
         price = extract_price(announcement_text)
         return price
 
-# TODO: need to inject the round/iteration info to the prompt
 
 def main():
 
@@ -141,8 +149,8 @@ def main():
     # symmetric for now
     buyers_reservation_prices = np.round(np.linspace(0.8, 3.2, 11), 2)
     sellers_reservation_prices = np.round(np.linspace(0.8, 3.2, 11), 2)
-    print(f"Buyers reservation prices: {buyers_reservation_prices}")
-    print(f"Sellers reservation prices: {sellers_reservation_prices}")
+    logging.info(f"Buyers reservation prices: {buyers_reservation_prices}")
+    logging.info(f"Sellers reservation prices: {sellers_reservation_prices}")
 
     # initialise the agents (buyers and sellers with symmetric res prices)
     agents = []
@@ -153,9 +161,12 @@ def main():
 
     # intitialise a dataframe to record the results
     df_data = pd.DataFrame(columns=['round', 'iteration', 'price', 'announcement', 
-                                    'transaction', 'announcement_type'])
+                                    'transaction', 'announcement_type',
+                                    'announcing_agent_id', 'announcing_agent_reservation_price',
+                                    'responding_agent_id', 'responding_agent_reservation_price'])
 
     # conduct each round of the expeirment seqeuentially
+    print("Running the experiment...")
     history = ""
     for round in range(1, N_ROUNDS+1):
         remaining_agents = agents.copy()
@@ -171,33 +182,41 @@ def main():
             np.random.shuffle(remaining_agents)
 
             # solicit a price announcement
-            print("Prompting agents for an announcement...")
-            for i, agent in enumerate(remaining_agents):
-                price = agent.announce(history, round, iteration)
+            logging.info("Prompting agents for an announcement...")
+            for i, announcing_agent in enumerate(remaining_agents):
+                price = announcing_agent.announce(history, round, iteration)
                 if price is not None:
                     announcement_made = True
-                    if isinstance(agent, Seller):
+                    if isinstance(announcing_agent, Seller):
                         announcement_type = "sell"
                     else:
                         announcement_type = "buy"
-                    print(f"An announcement to {announcement_type} for ${price} was made by agent {agent._id} at iteration {iteration}.")
-                    #TODO: what if no announcement made after going through all?
+                    logging.info(f"An announcement to {announcement_type} for ${price} was made by agent {announcing_agent._id} at iteration {iteration}.")
+                    announcing_agent_id = announcing_agent._id
+                    announcing_agent_reservation_price = announcing_agent._reservation_price
 
                     # obtain a response to the announcement
-                    print("Prompting agents for a response to the announcement...")
-                    for j, agent in enumerate(remaining_agents):
-                        if (isinstance(agent, Seller) and announcement_type == "buy") or (isinstance(agent, Buyer) and announcement_type == "sell"):
-                            response = agent.respond(price, history, round, iteration)
+                    logging.info("Prompting agents for a response to the announcement...")
+                    for j, responding_agent in enumerate(remaining_agents):
+                        if (isinstance(responding_agent, Seller) and announcement_type == "buy") or (isinstance(responding_agent, Buyer) and announcement_type == "sell"):
+                            response = responding_agent.respond(price, history, round, iteration)
                             if response:
                                 # record and remove the dealing agents
-                                print(f"An announcement to {announcement_type} for ${price} was accepted by agent {agent._id} at iteration {iteration}.")
+                                logging.info(f"An announcement to {announcement_type} for ${price} was accepted by agent {responding_agent._id} at iteration {iteration}.")
+                                responding_agent_id = responding_agent._id
+                                responding_agent_reservation_price = responding_agent._reservation_price
                                 for idx in sorted([i, j], reverse=True):
                                     del remaining_agents[idx]
                                 transaction_made = True
                                 break
+
+                    if transaction_made:
+                        break
+                    # Maybe it would be cleaner to use a while loop in this case, rather than shuffling
+
             
             if not announcement_made:
-                print(f'No announcement was made at iteration {iteration}.')
+                logging.info(f'No announcement was made at iteration {iteration}.')
             
             # update the prompt with history of what happened at this iteration
             if announcement_made:
@@ -212,32 +231,22 @@ def main():
             data_iter = {'round': [round], 'iteration': [iteration], 'price': [price],
                          'announcement': [announcement_made], 
                          'transaction': [transaction_made],
-                         'announcement_type': [announcement_type]}
+                         'announcement_type': [announcement_type],
+                         'announcing_agent_id': [announcing_agent_id],
+                         'announcing_agent_reservation_price': [announcing_agent_reservation_price],
+                         'responding_agent_id': [responding_agent_id],
+                         'responding_agent_reservation_price': [responding_agent_reservation_price]}
             df_data = pd.concat([df_data, pd.DataFrame(data=data_iter)], 
                                 ignore_index=True)
 
     # save the results to CSV
-    output_filename = Path(__file__).parent.resolve() / "results/experiment_3.csv"
+    output_filename = Path(__file__).parent.resolve() / f"results/experiment_{EXPERIMENT_ID}.csv"
     df_data.to_csv(output_filename)
-    #TODO: you can record how much profit the participants made and how traded or not
     #TODO: need to check if the agents are not bidding above or asking below their reservation price
     #TODO: add an arg parser to be able to run the experiments as script once finished
 
     print("All done.")
     print("Exit.")  
-        
-
-
-    
-    # ask for bids/offers to all agents
-    # choose one randomly
-    # ask for a response to all the agents of the opposing type to the one announcing
-    # if a deal is made:
-        # record the deal data (choose one response randomly if many)
-        # remove the two involved agents from the round
-    # update the prompt recording exactly what happened during this iteration
-    # continue for a fixed number of iterations or until no deals are made any more
-
     
 
 if __name__ == "__main__":

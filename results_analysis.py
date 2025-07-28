@@ -5,12 +5,15 @@ import seaborn as sns
 
 from pathlib import Path
 
+# select the experiment for which you want to plot
+EXPERIMENT_ID = 5
+
 # set the paths
 results_path = Path(__file__).parent.resolve() / "results"
 figures_path = Path(__file__).parent.resolve() / "plots"
 
 # read the results data
-df_data = pd.read_csv(results_path/'experiment_3.csv', index_col=0)
+df_data = pd.read_csv(results_path/f'experiment_{EXPERIMENT_ID}.csv', index_col=0)
 
 # plot the offer prices
 plt.figure(figsize=(10, 5))
@@ -24,7 +27,7 @@ plt.xlabel('Iteration')
 plt.ylabel('Price')
 plt.tight_layout()
 plt.ylim(0, 4)
-plt.savefig(figures_path/'offer_prices.png', dpi=300, bbox_inches='tight')
+plt.savefig(figures_path/f'offer_prices_{EXPERIMENT_ID}.png', dpi=300, bbox_inches='tight')
 
 # plot the transaction prices
 df_plot = df_data.loc[df_data['transaction']==True].reset_index()
@@ -41,6 +44,6 @@ plt.xlabel('Iteration')
 plt.ylabel('Price')
 plt.tight_layout()
 plt.ylim(0, 4)
-plt.savefig(figures_path/'transaction_prices.png', dpi=300, bbox_inches='tight')
+plt.savefig(figures_path/f'transaction_prices_{EXPERIMENT_ID}.png', dpi=300, bbox_inches='tight')
 
 

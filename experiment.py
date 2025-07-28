@@ -11,11 +11,11 @@ from llm_setup import act_gpt4_test
 
 # NOTE: the bid/offer terminology is very specific to finance, but maybe that is good
 
-EXPERIMENT_ID = 4
+EXPERIMENT_ID = 5
 
 # experiment parameters
 N_ROUNDS = 5
-N_ITER = 5
+N_ITER = 10
 
 # configure the logger
 logging.basicConfig(

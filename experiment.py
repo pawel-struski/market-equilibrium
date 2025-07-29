@@ -22,7 +22,7 @@ logging.basicConfig(
     filename=Path(__file__).parent.resolve() / f"logs/experiment_{EXPERIMENT_ID}.log",
     filemode='w',                   
     level=logging.INFO
-    )
+)
 
 
 def extract_price(text: str) -> float:
@@ -252,7 +252,7 @@ def main():
     df_data.to_csv(output_filename)
     #TODO: add an arg parser to be able to run the experiments as script once finished
 
-    logging("All done.")
+    logging.info("All done.")
     
 
 if __name__ == "__main__":

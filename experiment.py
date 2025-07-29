@@ -11,7 +11,7 @@ from llm_setup import act_gpt4_test
 
 # NOTE: the bid/offer terminology is very specific to finance, but maybe that is good
 
-EXPERIMENT_ID = 6
+EXPERIMENT_ID = 7
 
 # experiment parameters
 N_ROUNDS = 5
@@ -53,6 +53,7 @@ class Agent(ABC):
     def __init__(self, id: int, reservation_price: float):
         self._reservation_price = reservation_price
         self._id = id
+        self.own_history = ""
 
     @abstractmethod
     def respond(self, price: float, history: str, round: int, iteration: int) -> bool: ...
@@ -84,7 +85,7 @@ class Buyer(Agent):
         super().__init__(id, reservation_price)
 
     def respond(self, price: float, history: str, round: int, iteration: int) -> bool:
-        prompt = self.instructions + f"Your reservation price is {self._reservation_price}.\n" + history + f"This is round {round}/{N_ROUNDS} iteration {iteration}/{N_ITER}. Someone is offering to sell at ${price:.2f}. Do you buy? Only answer with a yes or no."
+        prompt = self.instructions + f"Your reservation price is {self._reservation_price}.\n" + "Market history:\n" + history + "History of your actions:\n" + self.own_history + f"This is round {round}/{N_ROUNDS} iteration {iteration}/{N_ITER}. Someone is offering to sell at ${price:.2f}. Do you buy? Only answer with a yes or no."
         # call the LLM with the prompt and get the response
         logging.info(f"Buyer with id {self._id} calling the LLM with the prompt: \n{prompt}")
         response_text = act_gpt4_test(prompt)
@@ -93,13 +94,21 @@ class Buyer(Agent):
         return response
         
     def announce(self, history: str, round: int, iteration: int) -> float:
-        prompt = self.instructions + f"Your reservation price is {self._reservation_price}.\n" + history + f"This is round {round}/{N_ROUNDS} iteration {iteration}/{N_ITER}. Do you want to announce a bid to buy? If so, what is your bid price? Answer only with a number."
+        prompt = self.instructions + f"Your reservation price is {self._reservation_price}.\n" + "Market history:\n" + history + "History of your actions:\n" + self.own_history + f"This is round {round}/{N_ROUNDS} iteration {iteration}/{N_ITER}. Do you want to announce a bid to buy? If so, what is your bid price? Answer only with a number."
         # call the LLM with the prompt and get the response
         logging.info(f"Buyer with id {self._id} calling the LLM with the prompt: \n{prompt}")
         announcement_text = act_gpt4_test(prompt)
         logging.info(f"LLM reponse: {announcement_text}")
         price = extract_price(announcement_text)
         return price
+    
+    def update_own_announcement_history(self, price: float, round: int, iteration: int, accepted: bool):
+        outcome = "accepted" if accepted else "rejected"
+        self.own_history += f"In round {round} at iteration {iteration}, your offer to buy for ${price:.2f} was {outcome}.\n"
+    
+    def update_own_responding_history(self, price: float, round: int, iteration: int, accepted: bool):
+        outcome = "accepted" if accepted else "rejected"
+        self.own_history += f"In round {round} at iteration {iteration}, you {outcome} an offer to sell for ${price:.2f}.\n"
     
 
 class Seller(Agent):
@@ -141,6 +150,14 @@ class Seller(Agent):
         logging.info(f"LLM reponse: {announcement_text}")
         price = extract_price(announcement_text)
         return price
+    
+    def update_own_announcement_history(self, price: float, round: int, iteration: int, accepted: bool):
+        outcome = "accepted" if accepted else "rejected"
+        self.own_history += f"In round {round} at iteration {iteration}, your offer to sell for ${price:.2f} was {outcome}.\n"
+    
+    def update_own_responding_history(self, price: float, round: int, iteration: int, accepted: bool):
+        outcome = "accepted" if accepted else "rejected"
+        self.own_history += f"In round {round} at iteration {iteration}, you {outcome} an offer to buy for ${price:.2f}.\n"
 
 
 def main():
@@ -205,6 +222,7 @@ def main():
                     for j, responding_agent in enumerate(remaining_agents):
                         if (isinstance(responding_agent, Seller) and announcement_type == "buy") or (isinstance(responding_agent, Buyer) and announcement_type == "sell"):
                             response = responding_agent.respond(price, history, round, iteration)
+                            responding_agent.update_own_responding_history(price, round, iteration, accepted=response)
                             if response:
                                 # record and remove the dealing agents
                                 logging.info(f"An announcement to {announcement_type} for ${price} was accepted by agent {responding_agent._id} at iteration {iteration}.")
@@ -216,7 +234,10 @@ def main():
                                 break
 
                     if transaction_made:
+                        announcing_agent.update_own_announcement_history(price, round, iteration, accepted=True)
                         break
+                    else:
+                        announcing_agent.update_own_announcement_history(price, round, iteration, accepted=False)
                     # Maybe it would be cleaner to use a while loop in this case, rather than shuffling
 
             

@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Tuple
 from pathlib import Path
+from enum import Enum
 import pandas as pd
 import numpy as np
 import re
@@ -11,7 +12,7 @@ from llm_setup import act_gpt4_test
 
 # NOTE: the bid/offer terminology is very specific to finance, but maybe that is good
 
-EXPERIMENT_ID = 7
+EXPERIMENT_ID = 8
 
 # experiment parameters
 N_ROUNDS = 5
@@ -46,6 +47,11 @@ def extract_response(text: str) -> bool:
     else:
         return False
 
+class Action(Enum):
+    ANNOUNCE = 'announce'
+    RESPOND = 'respond'
+
+
 # cleaner design: implement respond/announce method in the parent class
 # and let the child classes only differ in the prompt generation
 
@@ -53,13 +59,24 @@ class Agent(ABC):
     def __init__(self, id: int, reservation_price: float):
         self._reservation_price = reservation_price
         self._id = id
-        self.own_history = ""
+        self.own_history_prompt = ""
+        self.own_history_data = []
 
     @abstractmethod
     def respond(self, price: float, history: str, round: int, iteration: int) -> bool: ...
 
     @abstractmethod
     def announce(self, history: str, round: int, iteration: int) -> float: ...
+
+    def update_own_history_data(self, round: int, iteration: int, action: Action, price: float, accepted: bool):
+        outcome = "accepted" if accepted else "rejected"
+        self.own_history_data.append({
+            'round': round, 
+            'iteration': iteration, 
+            'action': action.value,
+            'price': price,
+            'outcome': outcome
+        })
 
 
 class Buyer(Agent):
@@ -85,7 +102,7 @@ class Buyer(Agent):
         super().__init__(id, reservation_price)
 
     def respond(self, price: float, history: str, round: int, iteration: int) -> bool:
-        prompt = self.instructions + f"Your reservation price is {self._reservation_price}.\n" + "Market history:\n" + history + "History of your actions:\n" + self.own_history + f"This is round {round}/{N_ROUNDS} iteration {iteration}/{N_ITER}. Someone is offering to sell at ${price:.2f}. Do you buy? Only answer with a yes or no."
+        prompt = self.instructions + f"Your reservation price is {self._reservation_price}.\n" + "Market history:\n" + history + "History of your actions:\n" + self.own_history_prompt + f"This is round {round}/{N_ROUNDS} iteration {iteration}/{N_ITER}. Someone is offering to sell at ${price:.2f}. Do you buy? Only answer with a yes or no."
         # call the LLM with the prompt and get the response
         logging.info(f"Buyer with id {self._id} calling the LLM with the prompt: \n{prompt}")
         response_text = act_gpt4_test(prompt)
@@ -94,7 +111,7 @@ class Buyer(Agent):
         return response
         
     def announce(self, history: str, round: int, iteration: int) -> float:
-        prompt = self.instructions + f"Your reservation price is {self._reservation_price}.\n" + "Market history:\n" + history + "History of your actions:\n" + self.own_history + f"This is round {round}/{N_ROUNDS} iteration {iteration}/{N_ITER}. Do you want to announce a bid to buy? If so, what is your bid price? Answer only with a number."
+        prompt = self.instructions + f"Your reservation price is {self._reservation_price}.\n" + "Market history:\n" + history + "History of your actions:\n" + self.own_history_prompt + f"This is round {round}/{N_ROUNDS} iteration {iteration}/{N_ITER}. Do you want to announce a bid to buy? If so, what is your bid price? Answer only with a number."
         # call the LLM with the prompt and get the response
         logging.info(f"Buyer with id {self._id} calling the LLM with the prompt: \n{prompt}")
         announcement_text = act_gpt4_test(prompt)
@@ -104,12 +121,14 @@ class Buyer(Agent):
     
     def update_own_announcement_history(self, price: float, round: int, iteration: int, accepted: bool):
         outcome = "accepted" if accepted else "rejected"
-        self.own_history += f"In round {round} at iteration {iteration}, your offer to buy for ${price:.2f} was {outcome}.\n"
+        self.own_history_prompt += f"In round {round} at iteration {iteration}, your offer to buy for ${price:.2f} was {outcome}.\n"
+        self.update_own_history_data(round, iteration, Action.ANNOUNCE, price, accepted)
     
     def update_own_responding_history(self, price: float, round: int, iteration: int, accepted: bool):
         outcome = "accepted" if accepted else "rejected"
-        self.own_history += f"In round {round} at iteration {iteration}, you {outcome} an offer to sell for ${price:.2f}.\n"
-    
+        self.own_history_prompt += f"In round {round} at iteration {iteration}, you {outcome} an offer to sell for ${price:.2f}.\n"
+        self.update_own_history_data(round, iteration, Action.RESPOND, price, accepted)
+            
 
 class Seller(Agent):
 
@@ -134,7 +153,7 @@ class Seller(Agent):
         super().__init__(id, reservation_price)
 
     def respond(self, price: float, history: str, round: int, iteration: int) -> bool:
-        prompt = self.instructions + f"Your reservation price is {self._reservation_price}.\n" + history + f"This is round {round}/{N_ROUNDS} iteration {iteration}/{N_ITER}. Someone is offering to buy at ${price:.2f}. Do you sell? Only answer with a yes or no."
+        prompt = self.instructions + f"Your reservation price is {self._reservation_price}.\n" + "Market history:\n" + history + "History of your actions:\n" + self.own_history_prompt + f"This is round {round}/{N_ROUNDS} iteration {iteration}/{N_ITER}. Someone is offering to buy at ${price:.2f}. Do you sell? Only answer with a yes or no."
         # call the LLM with the prompt and get the response
         logging.info(f"Seller with id {self._id} calling the LLM with the prompt: \n{prompt}")
         response_text = act_gpt4_test(prompt)
@@ -143,7 +162,7 @@ class Seller(Agent):
         return response
     
     def announce(self, history: str, round: int, iteration: int) -> float:
-        prompt = self.instructions + f"Your reservation price is {self._reservation_price}.\n" + history + f"This is round {round}/{N_ROUNDS} iteration {iteration}/{N_ITER}. Do you want to announce an offer to sell? If so, what is your asking price? Answer only with a number."
+        prompt = self.instructions + f"Your reservation price is {self._reservation_price}.\n" + "Market history:\n" + history + "History of your actions:\n" + self.own_history_prompt + f"This is round {round}/{N_ROUNDS} iteration {iteration}/{N_ITER}. Do you want to announce an offer to sell? If so, what is your asking price? Answer only with a number."
         # call the LLM with the prompt and extract the response price
         logging.info(f"Seller with id {self._id} calling the LLM with the prompt: \n{prompt}")
         announcement_text = act_gpt4_test(prompt)
@@ -153,11 +172,13 @@ class Seller(Agent):
     
     def update_own_announcement_history(self, price: float, round: int, iteration: int, accepted: bool):
         outcome = "accepted" if accepted else "rejected"
-        self.own_history += f"In round {round} at iteration {iteration}, your offer to sell for ${price:.2f} was {outcome}.\n"
+        self.own_history_prompt += f"In round {round} at iteration {iteration}, your offer to sell for ${price:.2f} was {outcome}.\n"
+        self.update_own_history_data(round, iteration, Action.ANNOUNCE, price, accepted)
     
     def update_own_responding_history(self, price: float, round: int, iteration: int, accepted: bool):
         outcome = "accepted" if accepted else "rejected"
-        self.own_history += f"In round {round} at iteration {iteration}, you {outcome} an offer to buy for ${price:.2f}.\n"
+        self.own_history_prompt += f"In round {round} at iteration {iteration}, you {outcome} an offer to buy for ${price:.2f}.\n"
+        self.update_own_history_data(round, iteration, Action.RESPOND, price, accepted)
 
 
 def main():
@@ -175,12 +196,6 @@ def main():
         agents.append(Buyer(id, res_price))
     for id, res_price in enumerate(buyers_reservation_prices):
         agents.append(Seller(id, res_price))
-
-    # intitialise a dataframe to record the results
-    # df_data = pd.DataFrame(columns=['round', 'iteration', 'price', 'announcement', 
-    #                                 'transaction', 'announcement_type',
-    #                                 'announcing_agent_id', 'announcing_agent_reservation_price',
-    #                                 'responding_agent_id', 'responding_agent_reservation_price'])
 
     # conduct each round of the expeirment seqeuentially
     print("Running the experiment...")
@@ -265,12 +280,21 @@ def main():
                 'responding_agent_reservation_price': responding_agent_reservation_price
             })
 
-    # store the results in a dataframe 
-    df_data = pd.DataFrame.from_dict(data_iterations)
-
     # save the results to CSV
     output_filename = Path(__file__).parent.resolve() / f"results/experiment_{EXPERIMENT_ID}.csv"
-    df_data.to_csv(output_filename)
+    pd.DataFrame.from_dict(data_iterations).to_csv(output_filename)
+    agents_dfs = []
+    for agent in agents:
+        df_data_agent = pd.DataFrame.from_dict(agent.own_history_data)
+        df_data_agent['id'] = agent._id
+        df_data_agent['reservation_price'] = agent._reservation_price
+        df_data_agent['type'] = type(agent).__name__
+        agents_dfs.append(df_data_agent)
+    df_data_agents = pd.concat([df for df in agents_dfs])
+    output_filename = Path(__file__).parent.resolve() / f"results/agent_histories/experiment{EXPERIMENT_ID}.csv"
+    df_data_agents.to_csv(output_filename)
+
+
     #TODO: add an arg parser to be able to run the experiments as script once finished
 
     logging.info("All done.")

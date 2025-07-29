@@ -11,7 +11,7 @@ from llm_setup import act_gpt4_test
 
 # NOTE: the bid/offer terminology is very specific to finance, but maybe that is good
 
-EXPERIMENT_ID = 5
+EXPERIMENT_ID = 6
 
 # experiment parameters
 N_ROUNDS = 5
@@ -160,14 +160,15 @@ def main():
         agents.append(Seller(id, res_price))
 
     # intitialise a dataframe to record the results
-    df_data = pd.DataFrame(columns=['round', 'iteration', 'price', 'announcement', 
-                                    'transaction', 'announcement_type',
-                                    'announcing_agent_id', 'announcing_agent_reservation_price',
-                                    'responding_agent_id', 'responding_agent_reservation_price'])
+    # df_data = pd.DataFrame(columns=['round', 'iteration', 'price', 'announcement', 
+    #                                 'transaction', 'announcement_type',
+    #                                 'announcing_agent_id', 'announcing_agent_reservation_price',
+    #                                 'responding_agent_id', 'responding_agent_reservation_price'])
 
     # conduct each round of the expeirment seqeuentially
     print("Running the experiment...")
     history = ""
+    data_iterations = []
     for round in range(1, N_ROUNDS+1):
         remaining_agents = agents.copy()
 
@@ -177,6 +178,10 @@ def main():
             transaction_made = False
             announcement_made = False
             announcement_type = ""
+            responding_agent_id = None
+            announcing_agent_id = None
+            announcing_agent_reservation_price = None
+            responding_agent_reservation_price = None
             
             # shuffle the agents order
             np.random.shuffle(remaining_agents)
@@ -228,25 +233,26 @@ def main():
                 history += f"In round {round} at iteration {iteration}, no announcement was made.\n"
 
             # store the data from the current iteration
-            data_iter = {'round': [round], 'iteration': [iteration], 'price': [price],
-                         'announcement': [announcement_made], 
-                         'transaction': [transaction_made],
-                         'announcement_type': [announcement_type],
-                         'announcing_agent_id': [announcing_agent_id],
-                         'announcing_agent_reservation_price': [announcing_agent_reservation_price],
-                         'responding_agent_id': [responding_agent_id],
-                         'responding_agent_reservation_price': [responding_agent_reservation_price]}
-            df_data = pd.concat([df_data, pd.DataFrame(data=data_iter)], 
-                                ignore_index=True)
+            data_iterations.append({
+                'round': round, 'iteration': iteration, 'price': price,
+                'announcement': announcement_made, 
+                'transaction': transaction_made,
+                'announcement_type': announcement_type,
+                'announcing_agent_id': announcing_agent_id,
+                'announcing_agent_reservation_price': announcing_agent_reservation_price,
+                'responding_agent_id': responding_agent_id,
+                'responding_agent_reservation_price': responding_agent_reservation_price
+            })
+
+    # store the results in a dataframe 
+    df_data = pd.DataFrame.from_dict(data_iterations)
 
     # save the results to CSV
     output_filename = Path(__file__).parent.resolve() / f"results/experiment_{EXPERIMENT_ID}.csv"
     df_data.to_csv(output_filename)
-    #TODO: need to check if the agents are not bidding above or asking below their reservation price
     #TODO: add an arg parser to be able to run the experiments as script once finished
 
-    print("All done.")
-    print("Exit.")  
+    logging("All done.")
     
 
 if __name__ == "__main__":

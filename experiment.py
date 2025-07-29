@@ -64,19 +64,19 @@ class Agent(ABC):
 class Buyer(Agent):
 
     instructions = f"""
-    You are a buyer. Your task is to buy a unit of good at the lowest possible price, 
-    but no higher than your reservation price. There will be {N_ROUNDS} rounds.
-    Your reservation price will be revealed to you, and only you, at the start.
+    You are a buyer participating in a market for a good you need. Your task is to buy a unit of the good at the lowest possible price but no higher than your reservation price.
+    Your reservation price is known to you and only you.
     Under no condition can you buy above your reservation price. 
-    However, buying at a price equal to your reservation price is perfectly acceptable and preferred than not buying at all.
+    However, buying at a price equal to your reservation price is acceptable and preferred than not buying at all.
     
     There are 11 sellers and 11 buyers (including you) in the room.
     Any buyer or seller is free at any time to raise his hand and make a verbal offer to buy/sell.
     Any buyer or seller is free to accept anb in th offer, in whicand h case a binding contract has been formed, the transaction occurs and the buyer and seller drop out of the market (no longer permitted to do anything for the remainder of that ronud).
 
-    Each round, you want to buy an additional unit of the good and are able to 
-    participate in the market irrespective of whether you transacted during the previous day.
-    Each round, a maximum of {N_ITER} transactions can be made.
+    There will be {N_ROUNDS} rounds.
+
+    Each round, you want to buy an additional unit of the good and are able to transact irrespective of whether you transacted in the previous round.
+    Each round, a maximum of {N_ITER} transactions can be made. You can only make one transaction per round.
     \n
     """    
 
@@ -105,19 +105,19 @@ class Buyer(Agent):
 class Seller(Agent):
 
     instructions = f"""
-    You are a seller. Your task is to sell a unit of your good at the highest possible price, 
-    but no lower than your reservation price. There will be {N_ROUNDS} rounds.
-    Your reservation price will be revealed to you, and only you, at the start.
+    You are a seller participating in a market for a good you need to sell. Your task is to sell a unit of the good at the highest possible price but no lower than your reservation price.
+    Your reservation price is known to you and only you.
     Under no condition can you sell below your reservation price. 
-    However, selling at a price equal to your reservation price is perfectly acceptable and preferred than not selling at all.
+    However, selling at a price equal to your reservation price is acceptable and preferred than not selling at all.
     
     There are 11 buyers and 11 sellers (including you) in the room.
-    Any buyer or seller is free at any time to raise his hand and make a verbal offer to buy/sell.
-    Any buyer or seller is free to accept an offer, in whicand h case a binding contract has been formed, the transaction occurs and the buyer and seller drop out of the market (no longer permitted to do anything for the remainder of that round).
+    Any buyer or seller is free at any time to raise his hand and make a verbal offer to buy or sell.
+    Any buyer or seller is free to accept an offer, in which case a binding contract has been formed, the transaction occurs and the buyer and seller drop out of the market (no longer permitted to do anything for the remainder of that round).
 
-    Each round, you receive an additional unit of the good and are able to 
-    participate in the market irrespective of whether you transacted during the previous day.
-    Each round, a maximum of {N_ITER} transactions can be made. You can only make one transaction.
+    There will be {N_ROUNDS} rounds.
+
+    Each round, you receive an additional unit of the good and are able to transact irrespective of whether you transacted in the previous round.
+    Each round, a maximum of {N_ITER} transactions can be made. You can only make one transaction per round.
     \n
     """
 

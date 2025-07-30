@@ -291,7 +291,7 @@ def main():
         df_data_agent['type'] = type(agent).__name__
         agents_dfs.append(df_data_agent)
     df_data_agents = pd.concat([df for df in agents_dfs])
-    output_filename = Path(__file__).parent.resolve() / f"results/agent_histories/experiment{EXPERIMENT_ID}.csv"
+    output_filename = Path(__file__).parent.resolve() / f"results/agent_histories/experiment_{EXPERIMENT_ID}.csv"
     df_data_agents.to_csv(output_filename)
 
 

@@ -26,17 +26,18 @@ logging.basicConfig(
 )
 
 
-def extract_price(text: str) -> float:
+def extract_price(number: str) -> float:
     """
-    Extracts a price from text if available and returns it as float.
+    Parses the price response from the LLM. Expects a number in the str format.
     """
-    match = re.search(r'(?:\$)?\s*(\d{1,3}(?:,\d{3})*|\d+)(\.\d{2})?', text)
-    if match:
-        number_str = match.group(1) + (match.group(2) if match.group(2) else '')
-        number_str = number_str.replace(',', '')  # Remove commas
-        return float(number_str)
-    return None
-
+    clean_number = number.strip()
+    try:
+        clean_number_float = float(clean_number)
+        return clean_number_float
+    except ValueError:
+        logging.info(f"Could not parse '{clean_number}' as float.")
+        return None 
+    
 
 def extract_response(text: str) -> bool:
     """
@@ -254,6 +255,8 @@ def main():
                     else:
                         announcing_agent.update_own_announcement_history(price, round, iteration, accepted=False)
                     # Maybe it would be cleaner to use a while loop in this case, rather than shuffling
+                else:
+                    logging.error("The price announcement from the LLM could not be parsed.")
 
             
             if not announcement_made:

@@ -95,7 +95,7 @@ def api_request_with_retry_2(prompt, model, max_tokens, temperature, max_retries
 def act_gpt4(text):
     messages=[{"role": "user", "content": text}]
     response = api_request_with_retry(
-        model = "gpt-4-0613",
+        model = "gpt-4.1-2025-04-14",
         max_tokens = 1,
         temperature = 0.0,
         messages = messages

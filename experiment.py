@@ -272,6 +272,7 @@ def main():
                 history += f"In round {round} at iteration {iteration}, no announcement was made.\n"
 
             # store the data from the current iteration
+            # TODO: this needs to be moved inside the solitcation loop because now we are only storing the last announcement  
             data_iterations.append({
                 'round': round, 'iteration': iteration, 'price': price,
                 'announcement': announcement_made, 

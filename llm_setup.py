@@ -3,16 +3,6 @@ from openai import APIError, APIConnectionError, RateLimitError, Client, OpenAI
 import os
 import time
 
-######################################################################
-### Llama 3 Setup
-######################################################################
-
-# client = InferenceClient(
-#     model="meta-llama/Llama-3.1-70B",
-#     token=os.environ.get("HF_TOKEN"),
-#     provider="featherless-ai"
-# )
-
 
 ######################################################################
 ### GPT Setup
@@ -20,7 +10,9 @@ import time
 
 openai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
-def api_request_with_retry(model, max_tokens, temperature, messages, max_retries=5, base_delay=1.0, backoff_factor=2.0):
+
+def api_request_with_retry(model, max_tokens, temperature, messages, 
+                           max_retries=5, base_delay=1.0, backoff_factor=2.0):
     retries = 0
 
     while retries <= max_retries:
@@ -52,7 +44,9 @@ def api_request_with_retry(model, max_tokens, temperature, messages, max_retries
 
     raise Exception("Failed to complete request after multiple retries")
 
-def api_request_with_retry_2(prompt, model, max_tokens, temperature, max_retries=5, base_delay=1.0, backoff_factor=2.0):
+
+def api_request_with_retry_2(prompt, model, max_tokens, temperature, 
+                             max_retries=5, base_delay=1.0, backoff_factor=2.0):
     retries = 0
 
     while retries <= max_retries:
@@ -80,44 +74,16 @@ def api_request_with_retry_2(prompt, model, max_tokens, temperature, max_retries
     raise Exception("Failed to complete request after multiple retries")
 
 
-######################################################################
-### All models
-######################################################################
-
-# def act_llama3(text, prev):
-#     generated = client.text_generation(
-#         text, 
-#         max_new_tokens=1,     
-#         temperature=1e-6 
-#     )
-#     return generated.strip()
-
-def act_gpt4(text):
+def act_gpt(text: str, llm_config: dict):
+    """
+    Sends a text prompt to the GPT model specified in exp_config and 
+    returns the response.
+    """
     messages=[{"role": "user", "content": text}]
     response = api_request_with_retry(
-        model = "gpt-4.1-2025-04-14",
-        max_tokens = 1,
-        temperature = 0.0,
-        messages = messages
-    )
-    return response.choices[0].message.content
-
-def act_gpt35(text):
-    response = api_request_with_retry_2(
-        model = "gpt-3.5-turbo-instruct",
-        prompt = text,
-        max_tokens = 1,
-        temperature = 0.0,
-    )
-    return response.choices[0].text.strip()
-
-
-def act_gpt4_test(text):
-    messages=[{"role": "user", "content": text}]
-    response = api_request_with_retry(
-        model = "gpt-4.1-mini-2025-04-14",
-        max_tokens = 5,
-        temperature = 0.0,
+        model = llm_config["model"],
+        max_tokens = llm_config["max_tokens"],
+        temperature = llm_config["temperature"],
         messages = messages
     )
     return response.choices[0].message.content

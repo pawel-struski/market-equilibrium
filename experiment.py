@@ -1,29 +1,20 @@
 from abc import ABC, abstractmethod
+import argparse
 from typing import Tuple
 from pathlib import Path
 from enum import Enum
+from datetime import datetime
 import pandas as pd
 import numpy as np
 import re
 import os
 import logging
+import shutil
 
-from llm_setup import act_gpt4_test
+from llm_setup import act_gpt
+from utils import load_config, get_git_commit
 
 # NOTE: the bid/offer terminology is very specific to finance, but maybe that is good
-
-EXPERIMENT_ID = 8
-
-# experiment parameters
-N_ROUNDS = 5
-N_ITER = 10
-
-# configure the logger
-logging.basicConfig(
-    filename=Path(__file__).parent.resolve() / f"logs/experiment_{EXPERIMENT_ID}.log",
-    filemode='w',                   
-    level=logging.INFO
-)
 
 
 def extract_price(number: str) -> float:
@@ -55,11 +46,16 @@ class Action(Enum):
 
 # cleaner design: implement respond/announce method in the parent class
 # and let the child classes only differ in the prompt generation
-
+# TODO: refactor the code to reduce duplication between Buyer and Seller - I think we only need one agent class now
 class Agent(ABC):
-    def __init__(self, id: int, reservation_price: float):
+    def __init__(self, id: int, reservation_price: float, llm_config: dict,
+                 instructions: str, n_rounds: int, n_iter: int):
         self._reservation_price = reservation_price
         self._id = id
+        self.llm_config = llm_config
+        self.instructions = instructions
+        self.n_rounds = n_rounds
+        self.n_iter = n_iter
         self.own_history_prompt = ""
         self.own_history_data = []
 
@@ -82,40 +78,24 @@ class Agent(ABC):
 
 class Buyer(Agent):
 
-    instructions = f"""
-    You are a buyer participating in a market for a good you need. Your task is to buy a unit of the good at the lowest possible price but no higher than your reservation price.
-    Your reservation price is known to you and only you.
-    Under no condition can you buy above your reservation price. 
-    However, buying at a price equal to your reservation price is acceptable and preferred than not buying at all.
-    
-    There are 11 sellers and 11 buyers (including you) in the room.
-    Any buyer or seller is free at any time to raise his hand and make a verbal offer to buy/sell.
-    Any buyer or seller is free to accept anb in th offer, in whicand h case a binding contract has been formed, the transaction occurs and the buyer and seller drop out of the market (no longer permitted to do anything for the remainder of that ronud).
-
-    There will be {N_ROUNDS} rounds.
-
-    Each round, you want to buy an additional unit of the good and are able to transact irrespective of whether you transacted in the previous round.
-    Each round, a maximum of {N_ITER} transactions can be made. You can only make one transaction per round.
-    \n
-    """    
-
-    def __init__(self, id: int, reservation_price: float):
-        super().__init__(id, reservation_price)
+    def __init__(self, id: int, reservation_price: float, llm_config: dict, 
+                 instructions: str, n_rounds: int, n_iter: int):
+        super().__init__(id, reservation_price, llm_config, instructions, n_rounds, n_iter)
 
     def respond(self, price: float, history: str, round: int, iteration: int) -> bool:
-        prompt = self.instructions + f"Your reservation price is {self._reservation_price}.\n" + "Market history:\n" + history + "History of your actions:\n" + self.own_history_prompt + f"This is round {round}/{N_ROUNDS} iteration {iteration}/{N_ITER}. Someone is offering to sell at ${price:.2f}. Do you buy? Only answer with a yes or no."
+        prompt = self.instructions + f"Your reservation price is {self._reservation_price}.\n" + "Market history:\n" + history + "History of your actions:\n" + self.own_history_prompt + f"This is round {round}/{self.n_rounds} iteration {iteration}/{self.n_iter}. Someone is offering to sell at ${price:.2f}. Do you buy? Only answer with a yes or no."
         # call the LLM with the prompt and get the response
         logging.info(f"Buyer with id {self._id} calling the LLM with the prompt: \n{prompt}")
-        response_text = act_gpt4_test(prompt)
+        response_text = act_gpt(prompt, self.llm_config)
         logging.info(f"LLM response: {response_text}")
         response = extract_response(response_text)
         return response
         
     def announce(self, history: str, round: int, iteration: int) -> float:
-        prompt = self.instructions + f"Your reservation price is {self._reservation_price}.\n" + "Market history:\n" + history + "History of your actions:\n" + self.own_history_prompt + f"This is round {round}/{N_ROUNDS} iteration {iteration}/{N_ITER}. Do you want to announce a bid to buy? If so, what is your bid price? Answer only with a number."
+        prompt = self.instructions + f"Your reservation price is {self._reservation_price}.\n" + "Market history:\n" + history + "History of your actions:\n" + self.own_history_prompt + f"This is round {round}/{self.n_rounds} iteration {iteration}/{self.n_iter}. Do you want to announce a bid to buy? If so, what is your bid price? Answer only with a number."
         # call the LLM with the prompt and get the response
         logging.info(f"Buyer with id {self._id} calling the LLM with the prompt: \n{prompt}")
-        announcement_text = act_gpt4_test(prompt)
+        announcement_text = act_gpt(prompt, self.llm_config)
         logging.info(f"LLM reponse: {announcement_text}")
         price = extract_price(announcement_text)
         return price
@@ -133,40 +113,24 @@ class Buyer(Agent):
 
 class Seller(Agent):
 
-    instructions = f"""
-    You are a seller participating in a market for a good you need to sell. Your task is to sell a unit of the good at the highest possible price but no lower than your reservation price.
-    Your reservation price is known to you and only you.
-    Under no condition can you sell below your reservation price. 
-    However, selling at a price equal to your reservation price is acceptable and preferred than not selling at all.
-    
-    There are 11 buyers and 11 sellers (including you) in the room.
-    Any buyer or seller is free at any time to raise his hand and make a verbal offer to buy or sell.
-    Any buyer or seller is free to accept an offer, in which case a binding contract has been formed, the transaction occurs and the buyer and seller drop out of the market (no longer permitted to do anything for the remainder of that round).
-
-    There will be {N_ROUNDS} rounds.
-
-    Each round, you receive an additional unit of the good and are able to transact irrespective of whether you transacted in the previous round.
-    Each round, a maximum of {N_ITER} transactions can be made. You can only make one transaction per round.
-    \n
-    """
-
-    def __init__(self, id: int, reservation_price: float):
-        super().__init__(id, reservation_price)
+    def __init__(self, id: int, reservation_price: float, llm_config: dict,
+                 instructions: str, n_rounds: int, n_iter: int):
+        super().__init__(id, reservation_price, llm_config, instructions, n_rounds, n_iter)
 
     def respond(self, price: float, history: str, round: int, iteration: int) -> bool:
-        prompt = self.instructions + f"Your reservation price is {self._reservation_price}.\n" + "Market history:\n" + history + "History of your actions:\n" + self.own_history_prompt + f"This is round {round}/{N_ROUNDS} iteration {iteration}/{N_ITER}. Someone is offering to buy at ${price:.2f}. Do you sell? Only answer with a yes or no."
+        prompt = self.instructions + f"Your reservation price is {self._reservation_price}.\n" + "Market history:\n" + history + "History of your actions:\n" + self.own_history_prompt + f"This is round {round}/{self.n_rounds} iteration {iteration}/{self.n_iter}. Someone is offering to buy at ${price:.2f}. Do you sell? Only answer with a yes or no."
         # call the LLM with the prompt and get the response
         logging.info(f"Seller with id {self._id} calling the LLM with the prompt: \n{prompt}")
-        response_text = act_gpt4_test(prompt)
+        response_text = act_gpt(prompt, self.llm_config)
         logging.info(f"LLM response: {response_text}")
         response = extract_response(response_text)
         return response
     
     def announce(self, history: str, round: int, iteration: int) -> float:
-        prompt = self.instructions + f"Your reservation price is {self._reservation_price}.\n" + "Market history:\n" + history + "History of your actions:\n" + self.own_history_prompt + f"This is round {round}/{N_ROUNDS} iteration {iteration}/{N_ITER}. Do you want to announce an offer to sell? If so, what is your asking price? Answer only with a number."
+        prompt = self.instructions + f"Your reservation price is {self._reservation_price}.\n" + "Market history:\n" + history + "History of your actions:\n" + self.own_history_prompt + f"This is round {round}/{self.n_rounds} iteration {iteration}/{self.n_iter}. Do you want to announce an offer to sell? If so, what is your asking price? Answer only with a number."
         # call the LLM with the prompt and extract the response price
         logging.info(f"Seller with id {self._id} calling the LLM with the prompt: \n{prompt}")
-        announcement_text = act_gpt4_test(prompt)
+        announcement_text = act_gpt(prompt, self.llm_config)
         logging.info(f"LLM reponse: {announcement_text}")
         price = extract_price(announcement_text)
         return price
@@ -182,24 +146,60 @@ class Seller(Agent):
         self.update_own_history_data(round, iteration, Action.RESPOND, price, accepted)
 
 
-def main():
+def main(config_name: str):
+
+    # load the experiment config
+    experiment_config_path = f"configs/{config_name}.yaml"
+    exp_config_path = Path(__file__).parent.resolve() / experiment_config_path
+    exp_config = load_config(exp_config_path)
+
+    # Determine experiment name and timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    commit_hash = get_git_commit()[:7]  # short hash for readability
+
+    # Create a unique results folder
+    outdir = Path(__file__).parent.resolve() / "results" / f"{config_name}_{commit_hash}_{timestamp}"
+    outdir.mkdir(parents=True, exist_ok=False)
+    
+    # Save the config used
+    shutil.copy(experiment_config_path, outdir / "config_used.yaml")
+
+    # configure the logger
+    logging.basicConfig(
+    filename= outdir / "experiment.log",
+    filemode='w',                   
+    level=logging.INFO)
+    
+    # extract config elements
+    llm_config = exp_config["llm"]
+    N_ROUNDS = exp_config["n_rounds"]
+    N_ITER = exp_config["n_iter"]
+
+    # format the instructions with the number of rounds and iterations
+    seller_instructions = exp_config["seller_instructions"].format(
+        N_ROUNDS=N_ROUNDS, N_ITER=N_ITER)
+    buyer_instructions = exp_config["buyer_instructions"].format(
+        N_ROUNDS=N_ROUNDS, N_ITER=N_ITER)
 
     # generate reservation prices for the buyers and sellers
-    # symmetric for now
-    buyers_reservation_prices = np.round(np.linspace(0.8, 3.2, 11), 2)
-    sellers_reservation_prices = np.round(np.linspace(0.8, 3.2, 11), 2)
+    bp = exp_config["buyers_reservation_prices"]
+    sp = exp_config["sellers_reservation_prices"]
+    buyers_reservation_prices = np.round(np.linspace(bp["min"], bp["max"], 
+                                                     bp["num"]), 2)
+    sellers_reservation_prices = np.round(np.linspace(sp["min"], sp["max"], 
+                                                     sp["num"]), 2)
     logging.info(f"Buyers reservation prices: {buyers_reservation_prices}")
     logging.info(f"Sellers reservation prices: {sellers_reservation_prices}")
 
     # initialise the agents (buyers and sellers with symmetric res prices)
     agents = []
     for id, res_price in enumerate(buyers_reservation_prices):
-        agents.append(Buyer(id, res_price))
+        agents.append(Buyer(id, res_price, llm_config, buyer_instructions, N_ROUNDS, N_ITER))
     for id, res_price in enumerate(buyers_reservation_prices):
-        agents.append(Seller(id, res_price))
+        agents.append(Seller(id, res_price, llm_config, seller_instructions, N_ROUNDS, N_ITER))
 
     # conduct each round of the expeirment seqeuentially
-    print("Running the experiment...")
+    print(f"Running the experiment based on configs/{config_name}.yaml...")
     history = ""
     data_iterations = []
     for round in range(1, N_ROUNDS+1):
@@ -285,7 +285,7 @@ def main():
             })
 
     # save the results to CSV
-    output_filename = Path(__file__).parent.resolve() / f"results/experiment_{EXPERIMENT_ID}.csv"
+    output_filename = outdir / f"iteration_history.csv"
     pd.DataFrame.from_dict(data_iterations).to_csv(output_filename)
     agents_dfs = []
     for agent in agents:
@@ -295,14 +295,15 @@ def main():
         df_data_agent['type'] = type(agent).__name__
         agents_dfs.append(df_data_agent)
     df_data_agents = pd.concat([df for df in agents_dfs]).reset_index(drop=True)
-    output_filename = Path(__file__).parent.resolve() / f"results/agent_histories/experiment_{EXPERIMENT_ID}.csv"
-    df_data_agents.to_csv(output_filename)
-
-
-    #TODO: add an arg parser to be able to run the experiments as script once finished
+    agent_output_filename = outdir / f"agent_histories.csv"
+    df_data_agents.to_csv(agent_output_filename)
+    #TODO: save also some summary statistics e.g. convergence to equilibrium, number of successful transactions, etc. 
 
     logging.info("All done.")
     
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Run a market equilibrium experiment.")
+    parser.add_argument("config_name", type=str, help="Name of the yaml config file to use (e.g. exp1)")
+    args = parser.parse_args()
+    main(args.config_name)

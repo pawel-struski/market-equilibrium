@@ -2,25 +2,18 @@ from abc import ABC, abstractmethod
 from typing import Tuple
 from pathlib import Path
 from enum import Enum
+from datetime import datetime
 import pandas as pd
 import numpy as np
 import re
 import os
 import logging
+import shutil
 
 from llm_setup import act_gpt
-from utils import load_config
+from utils import load_config, get_git_commit
 
 # NOTE: the bid/offer terminology is very specific to finance, but maybe that is good
-
-EXPERIMENT_ID = 11
-
-# configure the logger
-logging.basicConfig(
-    filename=Path(__file__).parent.resolve() / f"logs/experiment_{EXPERIMENT_ID}.log",
-    filemode='w',                   
-    level=logging.INFO
-)
 
 
 def extract_price(number: str) -> float:
@@ -158,6 +151,24 @@ def main():
     experiment_config_path = "configs/exp1.yaml"
     exp_config_path = Path(__file__).parent.resolve() / experiment_config_path
     exp_config = load_config(exp_config_path)
+
+    # Determine experiment name and timestamp
+    exp_name = "exp1"  # could be extracted from config later
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    commit_hash = get_git_commit()[:7]  # short hash for readability
+
+    # Create a unique results folder
+    outdir = Path(__file__).parent.resolve() / "results" / f"{exp_name}_{commit_hash}_{timestamp}"
+    outdir.mkdir(parents=True, exist_ok=False)
+    
+    # Save the config used
+    shutil.copy(experiment_config_path, outdir / "config_used.yaml")
+
+    # configure the logger
+    logging.basicConfig(
+    filename= outdir / "experiment.log",
+    filemode='w',                   
+    level=logging.INFO)
     
     # extract config elements
     llm_config = exp_config["llm"]
@@ -274,7 +285,7 @@ def main():
             })
 
     # save the results to CSV
-    output_filename = Path(__file__).parent.resolve() / f"results/experiment_{EXPERIMENT_ID}.csv"
+    output_filename = outdir / f"iteration_history.csv"
     pd.DataFrame.from_dict(data_iterations).to_csv(output_filename)
     agents_dfs = []
     for agent in agents:
@@ -284,8 +295,9 @@ def main():
         df_data_agent['type'] = type(agent).__name__
         agents_dfs.append(df_data_agent)
     df_data_agents = pd.concat([df for df in agents_dfs]).reset_index(drop=True)
-    output_filename = Path(__file__).parent.resolve() / f"results/agent_histories/experiment_{EXPERIMENT_ID}.csv"
-    df_data_agents.to_csv(output_filename)
+    agent_output_filename = outdir / f"agent_histories.csv"
+    df_data_agents.to_csv(agent_output_filename)
+    #TODO: save also some summary statistics e.g. convergence to equilibrium, number of successful transactions, etc. 
 
 
     #TODO: add an arg parser to be able to run the experiments as script once finished

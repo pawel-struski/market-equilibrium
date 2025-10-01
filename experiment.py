@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import argparse
 from typing import Tuple
 from pathlib import Path
 from enum import Enum
@@ -145,20 +146,19 @@ class Seller(Agent):
         self.update_own_history_data(round, iteration, Action.RESPOND, price, accepted)
 
 
-def main():
+def main(config_name: str):
 
     # load the experiment config
-    experiment_config_path = "configs/exp1.yaml"
+    experiment_config_path = f"configs/{config_name}.yaml"
     exp_config_path = Path(__file__).parent.resolve() / experiment_config_path
     exp_config = load_config(exp_config_path)
 
     # Determine experiment name and timestamp
-    exp_name = "exp1"  # could be extracted from config later
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     commit_hash = get_git_commit()[:7]  # short hash for readability
 
     # Create a unique results folder
-    outdir = Path(__file__).parent.resolve() / "results" / f"{exp_name}_{commit_hash}_{timestamp}"
+    outdir = Path(__file__).parent.resolve() / "results" / f"{config_name}_{commit_hash}_{timestamp}"
     outdir.mkdir(parents=True, exist_ok=False)
     
     # Save the config used
@@ -199,7 +199,7 @@ def main():
         agents.append(Seller(id, res_price, llm_config, seller_instructions, N_ROUNDS, N_ITER))
 
     # conduct each round of the expeirment seqeuentially
-    print("Running the experiment...")
+    print(f"Running the experiment based on configs/{config_name}.yaml...")
     history = ""
     data_iterations = []
     for round in range(1, N_ROUNDS+1):
@@ -299,11 +299,11 @@ def main():
     df_data_agents.to_csv(agent_output_filename)
     #TODO: save also some summary statistics e.g. convergence to equilibrium, number of successful transactions, etc. 
 
-
-    #TODO: add an arg parser to be able to run the experiments as script once finished
-
     logging.info("All done.")
     
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Run a market equilibrium experiment.")
+    parser.add_argument("config_name", type=str, help="Name of the yaml config file to use (e.g. exp1)")
+    args = parser.parse_args()
+    main(args.config_name)

@@ -46,4 +46,24 @@ buyer_instructions: |
 
     Each round, you want to buy an additional unit of the good and are able to transact irrespective of whether you transacted in the previous round.
     Each round, a maximum of {N_ITER} transactions can be made. You can only make one transaction per round.
-  
+
+buyer_response_prompt: |
+    Someone is offering to sell at ${price:.2f}. Do you buy? Only answer with a yes or no.
+
+buyer_announcement_prompt: |
+    Do you want to announce a bid to buy? If so, what is your bid price? Answer only with a number.
+
+seller_response_prompt: |
+    Someone is offering to buy at ${price:.2f}. Do you sell? Only answer with a yes or no.
+
+seller_announcement_prompt: |
+    Do you want to announce an offer to sell? If so, what is your asking price? Answer only with a number.
+
+prompt_context: |
+    Your reservation price is {reservation_price}.
+    Market history:
+    {history}
+    History of your actions:
+    {own_history}
+    {round_info}
+

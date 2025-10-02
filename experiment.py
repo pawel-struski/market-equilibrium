@@ -112,17 +112,19 @@ class Agent:
     def update_own_announcement_history(self, price: float, round: int, iteration: int, accepted: bool):
         outcome = "accepted" if accepted else "rejected"
         if self.type == AgentType.BUYER:
-            self.own_history_prompt += f"In round {round} at iteration {iteration}, your offer to buy for ${price:.2f} was {outcome}.\n"
+            announcement_type = AnnouncementType.BUY
         else:
-            self.own_history_prompt += f"In round {round} at iteration {iteration}, your offer to sell for ${price:.2f} was {outcome}.\n"
+            announcement_type = AnnouncementType.SELL
+        self.own_history_prompt += f"In round {round} at iteration {iteration}, your offer to {announcement_type.value} for ${price:.2f} was {outcome}.\n"
         self.update_own_history_data(round, iteration, Action.ANNOUNCE, price, accepted)
 
     def update_own_responding_history(self, price: float, round: int, iteration: int, accepted: bool):
         outcome = "accepted" if accepted else "rejected"
         if self.type == AgentType.BUYER:
-            self.own_history_prompt += f"In round {round} at iteration {iteration}, you {outcome} an offer to sell for ${price:.2f}.\n"
+            opposite_announcement_type = AnnouncementType.SELL
         else:
-            self.own_history_prompt += f"In round {round} at iteration {iteration}, you {outcome} an offer to buy for ${price:.2f}.\n"
+            opposite_announcement_type = AnnouncementType.BUY
+        self.own_history_prompt += f"In round {round} at iteration {iteration}, you {outcome} an offer to {opposite_announcement_type.value} for ${price:.2f}.\n"
         self.update_own_history_data(round, iteration, Action.RESPOND, price, accepted)
 
     def update_own_history_data(self, round: int, iteration: int, action: Action, price: float, accepted: bool):

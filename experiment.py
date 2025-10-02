@@ -55,6 +55,11 @@ class AnnouncementType(Enum):
     SELL = 'sell'
 
 
+class Outcome(Enum):
+    ACCEPTED = 'accepted'
+    REJECTED = 'rejected'
+
+
 class Agent:
     def __init__(self, id: int, reservation_price: float, llm_config: dict,
                  instructions: str, n_rounds: int, n_iter: int, 
@@ -110,31 +115,31 @@ class Agent:
         return price
 
     def update_own_announcement_history(self, price: float, round: int, iteration: int, accepted: bool):
-        outcome = "accepted" if accepted else "rejected"
+        outcome = Outcome.ACCEPTED if accepted else Outcome.REJECTED
         if self.type == AgentType.BUYER:
             announcement_type = AnnouncementType.BUY
         else:
             announcement_type = AnnouncementType.SELL
-        self.own_history_prompt += f"In round {round} at iteration {iteration}, your offer to {announcement_type.value} for ${price:.2f} was {outcome}.\n"
+        self.own_history_prompt += f"In round {round} at iteration {iteration}, your offer to {announcement_type.value} for ${price:.2f} was {outcome.value}.\n"
         self.update_own_history_data(round, iteration, Action.ANNOUNCE, price, accepted)
 
     def update_own_responding_history(self, price: float, round: int, iteration: int, accepted: bool):
-        outcome = "accepted" if accepted else "rejected"
+        outcome = Outcome.ACCEPTED if accepted else Outcome.REJECTED
         if self.type == AgentType.BUYER:
             opposite_announcement_type = AnnouncementType.SELL
         else:
             opposite_announcement_type = AnnouncementType.BUY
-        self.own_history_prompt += f"In round {round} at iteration {iteration}, you {outcome} an offer to {opposite_announcement_type.value} for ${price:.2f}.\n"
+        self.own_history_prompt += f"In round {round} at iteration {iteration}, you {outcome.value} an offer to {opposite_announcement_type.value} for ${price:.2f}.\n"
         self.update_own_history_data(round, iteration, Action.RESPOND, price, accepted)
 
     def update_own_history_data(self, round: int, iteration: int, action: Action, price: float, accepted: bool):
-        outcome = "accepted" if accepted else "rejected"
+        outcome = Outcome.ACCEPTED if accepted else Outcome.REJECTED
         self.own_history_data.append({
             'round': round,
             'iteration': iteration,
             'action': action.value,
             'price': price,
-            'outcome': outcome
+            'outcome': outcome.value
         })
 
 def main(config_name: str):

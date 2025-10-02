@@ -39,22 +39,34 @@ def extract_response(text: str) -> bool:
     else:
         return False
 
+
 class Action(Enum):
     ANNOUNCE = 'announce'
     RESPOND = 'respond'
 
 
+class AgentType(Enum):
+    BUYER = 'buyer'
+    SELLER = 'seller'
+
+
+class AnnouncementType(Enum):
+    BUY = 'buy'
+    SELL = 'sell'
+
+
 class Agent:
     def __init__(self, id: int, reservation_price: float, llm_config: dict,
-                 instructions: str, n_rounds: int, n_iter: int, agent_type: str,
-                 response_prompt: str, announcement_prompt: str, prompt_context: str):
+                 instructions: str, n_rounds: int, n_iter: int, 
+                 type: AgentType, response_prompt: str, 
+                 announcement_prompt: str, prompt_context: str):
         self._reservation_price = reservation_price
         self._id = id
         self.llm_config = llm_config
         self.instructions = instructions
         self.n_rounds = n_rounds
         self.n_iter = n_iter
-        self.agent_type = agent_type  # "buyer" or "seller"
+        self.type = type
         self.response_prompt = response_prompt
         self.announcement_prompt = announcement_prompt
         self.prompt_context = prompt_context
@@ -73,7 +85,7 @@ class Agent:
             )
             + self.response_prompt.format(price=price)
         )
-        logging.info(f"{self.agent_type.capitalize()} with id {self._id} calling the LLM with the prompt: \n{prompt}")
+        logging.info(f"{self.type.value.capitalize()} with id {self._id} calling the LLM with the prompt: \n{prompt}")
         response_text = act_gpt(prompt, self.llm_config)
         logging.info(f"LLM response: {response_text}")
         response = extract_response(response_text)
@@ -91,7 +103,7 @@ class Agent:
             )
             + self.announcement_prompt
         )
-        logging.info(f"{self.agent_type.capitalize()} with id {self._id} calling the LLM with the prompt: \n{prompt}")
+        logging.info(f"{self.type.value.capitalize()} with id {self._id} calling the LLM with the prompt: \n{prompt}")
         announcement_text = act_gpt(prompt, self.llm_config)
         logging.info(f"LLM response: {announcement_text}")
         price = extract_price(announcement_text)
@@ -99,7 +111,7 @@ class Agent:
 
     def update_own_announcement_history(self, price: float, round: int, iteration: int, accepted: bool):
         outcome = "accepted" if accepted else "rejected"
-        if self.agent_type == "buyer":
+        if self.type == AgentType.BUYER:
             self.own_history_prompt += f"In round {round} at iteration {iteration}, your offer to buy for ${price:.2f} was {outcome}.\n"
         else:
             self.own_history_prompt += f"In round {round} at iteration {iteration}, your offer to sell for ${price:.2f} was {outcome}.\n"
@@ -107,7 +119,7 @@ class Agent:
 
     def update_own_responding_history(self, price: float, round: int, iteration: int, accepted: bool):
         outcome = "accepted" if accepted else "rejected"
-        if self.agent_type == "buyer":
+        if self.type == AgentType.BUYER:
             self.own_history_prompt += f"In round {round} at iteration {iteration}, you {outcome} an offer to sell for ${price:.2f}.\n"
         else:
             self.own_history_prompt += f"In round {round} at iteration {iteration}, you {outcome} an offer to buy for ${price:.2f}.\n"
@@ -179,13 +191,15 @@ def main(config_name: str):
     agents = []
     for id, res_price in enumerate(buyers_reservation_prices):
         agents.append(Agent(
-            id, res_price, llm_config, buyer_instructions, N_ROUNDS, N_ITER, "buyer",
-            buyer_response_prompt, buyer_announcement_prompt, prompt_context
+            id, res_price, llm_config, buyer_instructions, N_ROUNDS, N_ITER, 
+            AgentType.BUYER, buyer_response_prompt, buyer_announcement_prompt, 
+            prompt_context
         ))
     for id, res_price in enumerate(sellers_reservation_prices):
         agents.append(Agent(
-            id, res_price, llm_config, seller_instructions, N_ROUNDS, N_ITER, "seller",
-            seller_response_prompt, seller_announcement_prompt, prompt_context
+            id, res_price, llm_config, seller_instructions, N_ROUNDS, N_ITER, 
+            AgentType.SELLER, seller_response_prompt, seller_announcement_prompt, 
+            prompt_context
         ))
 
     # conduct each round of the expeirment seqeuentially
@@ -200,7 +214,7 @@ def main(config_name: str):
             # reset the iteration info
             transaction_made = False
             announcement_made = False
-            announcement_type = ""
+            announcement_type = None
             responding_agent_id = None
             announcing_agent_id = None
             announcing_agent_reservation_price = None
@@ -215,23 +229,23 @@ def main(config_name: str):
                 price = announcing_agent.announce(history, round, iteration)
                 if price is not None:
                     announcement_made = True
-                    if announcing_agent.agent_type == "seller":
-                        announcement_type = "sell"
+                    if announcing_agent.type == AgentType.SELLER:
+                        announcement_type = AnnouncementType.SELL
                     else:
-                        announcement_type = "buy"
-                    logging.info(f"An announcement to {announcement_type} for ${price} was made by agent {announcing_agent._id} at iteration {iteration}.")
+                        announcement_type = AnnouncementType.BUY
+                    logging.info(f"An announcement to {announcement_type.value} for ${price} was made by agent {announcing_agent._id} at iteration {iteration}.")
                     announcing_agent_id = announcing_agent._id
                     announcing_agent_reservation_price = announcing_agent._reservation_price
 
                     # obtain a response to the announcement
                     logging.info("Prompting agents for a response to the announcement...")
                     for j, responding_agent in enumerate(remaining_agents):
-                        if (responding_agent.agent_type == "seller" and announcement_type == "buy") or (responding_agent.agent_type == "buyer" and announcement_type == "sell"):
+                        if (responding_agent.type == AgentType.SELLER and announcement_type == AnnouncementType.BUY) or (responding_agent.type == AgentType.BUYER and announcement_type == AnnouncementType.SELL):
                             response = responding_agent.respond(price, history, round, iteration)
                             responding_agent.update_own_responding_history(price, round, iteration, accepted=response)
                             if response:
                                 # record and remove the dealing agents
-                                logging.info(f"An announcement to {announcement_type} for ${price} was accepted by agent {responding_agent._id} at iteration {iteration}.")
+                                logging.info(f"An announcement to {announcement_type.value} for ${price} was accepted by agent {responding_agent._id} at iteration {iteration}.")
                                 responding_agent_id = responding_agent._id
                                 responding_agent_reservation_price = responding_agent._reservation_price
                                 for idx in sorted([i, j], reverse=True):
@@ -255,9 +269,9 @@ def main(config_name: str):
             # update the prompt with history of what happened at this iteration
             if announcement_made:
                 if transaction_made:
-                    history += f"In round {round} at iteration {iteration}, an announcement to {announcement_type} for ${price} was accepted.\n"
+                    history += f"In round {round} at iteration {iteration}, an announcement to {announcement_type.value} for ${price} was accepted.\n"
                 else:
-                    history += f"In round {round} at iteration {iteration}, an announcement to {announcement_type} for ${price} was made but no one responded.\n"
+                    history += f"In round {round} at iteration {iteration}, an announcement to {announcement_type.value} for ${price} was made but no one responded.\n"
             else:
                 history += f"In round {round} at iteration {iteration}, no announcement was made.\n"
 
@@ -267,7 +281,7 @@ def main(config_name: str):
                 'round': round, 'iteration': iteration, 'price': price,
                 'announcement': announcement_made, 
                 'transaction': transaction_made,
-                'announcement_type': announcement_type,
+                'announcement_type': announcement_type.value,
                 'announcing_agent_id': announcing_agent_id,
                 'announcing_agent_reservation_price': announcing_agent_reservation_price,
                 'responding_agent_id': responding_agent_id,
@@ -282,7 +296,7 @@ def main(config_name: str):
         df_data_agent = pd.DataFrame.from_dict(agent.own_history_data)
         df_data_agent['id'] = agent._id
         df_data_agent['reservation_price'] = agent._reservation_price
-        df_data_agent['type'] = type(agent).__name__
+        df_data_agent['type'] = agent.type.value
         agents_dfs.append(df_data_agent)
     df_data_agents = pd.concat([df for df in agents_dfs]).reset_index(drop=True)
     agent_output_filename = outdir / f"agent_histories.csv"

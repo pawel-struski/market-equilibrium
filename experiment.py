@@ -5,10 +5,13 @@ import pandas as pd
 import numpy as np
 import logging
 import shutil
+import copy
 
 from llm_setup import act_gpt
 from utils import load_config, get_git_commit
-from agent import Agent, AgentType, AnnouncementType, AgentPromptConfig, AgentLLMConfig
+from agent import (Agent, AgentType, AnnouncementType, AgentPromptConfig, 
+                   AgentLLMConfig, GeneralPromptConfig, AgentPromptKeywords,
+                   ExperimentConfig)
 
 # NOTE: the bid/offer terminology is very specific to finance, but maybe that is good
 
@@ -18,7 +21,7 @@ def main(config_name: str):
     # load the experiment config
     experiment_config_path = f"configs/{config_name}.yaml"
     exp_config_path = Path(__file__).parent.resolve() / experiment_config_path
-    exp_config = load_config(exp_config_path)
+    config = load_config(exp_config_path)
 
     # Determine experiment name and timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -37,16 +40,38 @@ def main(config_name: str):
     filemode='w',                   
     level=logging.INFO)
     
-    # extract config elements
-    llm_config = AgentLLMConfig(**exp_config["agent"]["llm"])
-    buyer_prompt_config = AgentPromptConfig(**exp_config["agent"]["prompts"]["buyer"])
-    seller_prompt_config = AgentPromptConfig(**exp_config["agent"]["prompts"]["seller"])
-    N_ROUNDS = exp_config["experiment"]["n_rounds"]
-    N_ITER = exp_config["experiment"]["n_iter"]
+    # extract experiment-level config elements
+    N_ROUNDS = config["experiment"]["n_rounds"]
+    N_ITER = config["experiment"]["n_iter"]
+    experiment_config = ExperimentConfig(N_ROUNDS=N_ROUNDS, N_ITER=N_ITER)
 
+    # extract LLM config elements
+    llm_config = AgentLLMConfig(**config["agent"]["llm"])
+    
+    # extract prompt config elements
+    prompt_config = config["agent"]["prompts"]
+
+    # create a general prompt config instance (common to both buyers and sellers)
+    general_prompt_config = GeneralPromptConfig(**prompt_config["general"])
+       
+    # extract buyer- and seller- specific prompt elements and create agent prompt configs
+    buyer_prompt_config = AgentPromptConfig(
+        general=general_prompt_config,
+        main_keywords=AgentPromptKeywords(**prompt_config["buyer"]["main_keywords"]),
+        response_prompt=prompt_config["buyer"]["response_prompt"],
+        announcement_prompt=prompt_config["buyer"]["announcement_prompt"],
+    )
+
+    seller_prompt_config = AgentPromptConfig(
+        general=general_prompt_config,
+        main_keywords=AgentPromptKeywords(**prompt_config["seller"]["main_keywords"]),
+        response_prompt=prompt_config["seller"]["response_prompt"],
+        announcement_prompt=prompt_config["seller"]["announcement_prompt"],
+    )
+    
     # generate symmetric reservation prices for the buyers and sellers
-    bp = exp_config["experiment"]["buyers_reservation_prices"]
-    sp = exp_config["experiment"]["sellers_reservation_prices"]
+    bp = config["experiment"]["buyers_reservation_prices"]
+    sp = config["experiment"]["sellers_reservation_prices"]
     buyers_reservation_prices = np.round(np.linspace(bp["min"], bp["max"], 
                                                      bp["num"]), 2)
     sellers_reservation_prices = np.round(np.linspace(sp["min"], sp["max"], 
@@ -58,13 +83,13 @@ def main(config_name: str):
     agents = []
     for id, res_price in enumerate(buyers_reservation_prices):
         agents.append(Agent(
-            id, res_price, AgentType.BUYER, buyer_prompt_config, llm_config, 
-            N_ROUNDS, N_ITER
+            id, res_price, AgentType.BUYER, buyer_prompt_config, llm_config,
+            experiment_config
         ))
     for id, res_price in enumerate(sellers_reservation_prices):
         agents.append(Agent(
             id, res_price, AgentType.SELLER, seller_prompt_config, llm_config,
-            N_ROUNDS, N_ITER
+            experiment_config
         ))
 
     # conduct each round of the expeirment seqeuentially

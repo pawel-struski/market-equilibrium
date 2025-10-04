@@ -109,6 +109,7 @@ def main(config_name: str):
             announcing_agent_id = None
             announcing_agent_reservation_price = None
             responding_agent_reservation_price = None
+            price = None
             
             # shuffle the agents order
             np.random.shuffle(remaining_agents)
@@ -133,11 +134,24 @@ def main(config_name: str):
                         if (responding_agent._type == AgentType.SELLER and announcement_type == AnnouncementType.BUY) or (responding_agent._type == AgentType.BUYER and announcement_type == AnnouncementType.SELL):
                             response = responding_agent.respond(price, market_history, round, iteration)
                             responding_agent.update_own_responding_history(price, round, iteration, accepted=response)
+                            responding_agent_id = responding_agent._id
+                            responding_agent_reservation_price = responding_agent._reservation_price
+                            # Save every response, not just the last one
+                            data_iterations.append({
+                                'round': round,
+                                'iteration': iteration,
+                                'price': price,
+                                'announcement': announcement_made,
+                                'transaction': response,
+                                'announcement_type': announcement_type.value,
+                                'announcing_agent_id': announcing_agent_id,
+                                'announcing_agent_reservation_price': announcing_agent_reservation_price,
+                                'responding_agent_id': responding_agent_id,
+                                'responding_agent_reservation_price': responding_agent_reservation_price
+                            })
                             if response:
                                 # record and remove the dealing agents
                                 logging.info(f"An announcement to {announcement_type.value} for ${price} was accepted by agent {responding_agent._id} at iteration {iteration}.")
-                                responding_agent_id = responding_agent._id
-                                responding_agent_reservation_price = responding_agent._reservation_price
                                 for idx in sorted([i, j], reverse=True):
                                     del remaining_agents[idx]
                                 transaction_made = True
@@ -151,12 +165,11 @@ def main(config_name: str):
                     # Maybe it would be cleaner to use a while loop in this case, rather than shuffling
                 else:
                     logging.error("The price announcement from the LLM could not be parsed.")
-
-            
+ 
             if not announcement_made:
                 logging.info(f'No announcement was made at iteration {iteration}.')
             
-            # update the prompt with history of what happened at this iteration
+            # update the market history of what happened at this iteration
             if announcement_made:
                 if transaction_made:
                     market_history += f"In round {round} at iteration {iteration}, an announcement to {announcement_type.value} for ${price} was accepted.\n"
@@ -164,19 +177,6 @@ def main(config_name: str):
                     market_history += f"In round {round} at iteration {iteration}, an announcement to {announcement_type.value} for ${price} was made but no one responded.\n"
             else:
                 market_history += f"In round {round} at iteration {iteration}, no announcement was made.\n"
-
-            # store the data from the current iteration
-            # TODO: this needs to be moved inside the solitcation loop because now we are only storing the last announcement  
-            data_iterations.append({
-                'round': round, 'iteration': iteration, 'price': price,
-                'announcement': announcement_made, 
-                'transaction': transaction_made,
-                'announcement_type': announcement_type.value,
-                'announcing_agent_id': announcing_agent_id,
-                'announcing_agent_reservation_price': announcing_agent_reservation_price,
-                'responding_agent_id': responding_agent_id,
-                'responding_agent_reservation_price': responding_agent_reservation_price
-            })
 
     # save the results to CSV
     output_filename = outdir / f"iteration_history.csv"

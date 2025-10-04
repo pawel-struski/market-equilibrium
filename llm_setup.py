@@ -74,16 +74,16 @@ def api_request_with_retry_2(prompt, model, max_tokens, temperature,
     raise Exception("Failed to complete request after multiple retries")
 
 
-def act_gpt(text: str, llm_config: dict):
+def act_gpt(text: str, model: str, max_tokens: int, temperature: float) -> str:
     """
     Sends a text prompt to the GPT model specified in exp_config and 
     returns the response.
     """
     messages=[{"role": "user", "content": text}]
     response = api_request_with_retry(
-        model = llm_config["model"],
-        max_tokens = llm_config["max_tokens"],
-        temperature = llm_config["temperature"],
+        model = model,
+        max_tokens = max_tokens,
+        temperature = temperature,
         messages = messages
     )
     return response.choices[0].message.content

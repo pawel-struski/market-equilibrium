@@ -2,7 +2,6 @@
 from dataclasses import dataclass
 from enum import Enum
 import logging
-from utils import extract_price, extract_response
 from llm_setup import act_gpt
 
 
@@ -77,7 +76,7 @@ class Agent:
         self.own_history_prompt = ""
         self.own_history_data = []
 
-    def render_prompt(self, market_history: str, round: int, iteration: int, 
+    def _render_prompt(self, market_history: str, round: int, iteration: int, 
                       action_prompt: str) -> str:
         # Collect all elements to fill the prompt in one place
         all_keys = {}
@@ -110,16 +109,16 @@ class Agent:
 
     def respond(self, price: float, market_history: str, round: int, iteration: int) -> bool:
         action_prompt = self.prompt_config.response_prompt.format(price=price)
-        prompt = self.render_prompt(market_history, round, iteration, action_prompt)
+        prompt = self._render_prompt(market_history, round, iteration, action_prompt)
         llm_text = self.generate_text_with_llm(prompt)
-        response = extract_response(llm_text)
+        response = self._extract_response(llm_text)
         return response
 
     def announce(self, market_history: str, round: int, iteration: int) -> float:
         action_prompt = self.prompt_config.announcement_prompt
-        prompt = self.render_prompt(market_history, round, iteration, action_prompt)
+        prompt = self._render_prompt(market_history, round, iteration, action_prompt)
         llm_text = self.generate_text_with_llm(prompt)
-        price = extract_price(llm_text)
+        price = self._extract_price(llm_text)
         return price
 
     def update_own_announcement_history(self, price: float, round: int, iteration: int, accepted: bool):
@@ -157,3 +156,26 @@ class Agent:
             'price': price,
             'outcome': outcome.value
         })
+
+    @staticmethod
+    def _extract_price(number: str) -> float:
+        """
+        Parses the price response from the LLM. Expects a number in the str format.
+        """
+        clean_number = number.strip()
+        try:
+            clean_number_float = float(clean_number)
+            return clean_number_float
+        except ValueError:
+            logging.info(f"Could not parse '{clean_number}' as float.")
+            return None 
+    
+    @staticmethod
+    def _extract_response(text: str) -> bool:
+        """
+        Extracts a boolean indicator of whether a deal is accepted from a textual response.
+        """
+        if "yes" in text.lower():
+            return True
+        else:
+            return False

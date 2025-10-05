@@ -164,25 +164,19 @@ def main(config_name: str):
 
                     if transaction_made:
                         announcing_agent.update_own_announcement_history(price, round, iteration, accepted=True)
+                        market_history += f"In round {round} at iteration {iteration}, an announcement to {announcement_type.value} for ${price} was accepted.\n"
                         break
                     else:
                         announcing_agent.update_own_announcement_history(price, round, iteration, accepted=False)
+                        market_history += f"In round {round} at iteration {iteration}, an announcement to {announcement_type.value} for ${price} was made but no one responded.\n"
                     # Maybe it would be cleaner to use a while loop in this case, rather than shuffling
                 else:
                     logging.error("The price announcement from the LLM could not be parsed.")
  
             if not announcement_made:
                 logging.info(f'No announcement was made at iteration {iteration}.')
-            
-            # update the market history of what happened at this iteration
-            if announcement_made:
-                if transaction_made:
-                    market_history += f"In round {round} at iteration {iteration}, an announcement to {announcement_type.value} for ${price} was accepted.\n"
-                else:
-                    market_history += f"In round {round} at iteration {iteration}, an announcement to {announcement_type.value} for ${price} was made but no one responded.\n"
-            else:
                 market_history += f"In round {round} at iteration {iteration}, no announcement was made.\n"
-
+            
     # save the results to CSV
     output_filename = outdir / f"iteration_history.csv"
     pd.DataFrame.from_dict(data_iterations).to_csv(output_filename)

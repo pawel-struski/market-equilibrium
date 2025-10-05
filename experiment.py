@@ -132,35 +132,42 @@ def main(config_name: str):
                     logging.info(f"An announcement to {announcement_type.value} for ${price} was made by agent {announcing_agent._id} at iteration {iteration}.")
                     announcing_agent_id = announcing_agent._id
                     announcing_agent_reservation_price = announcing_agent._reservation_price
+                    
+                    # filter and shuffle potential respondents
+                    potential_respondents = [
+                        agent for agent in remaining_agents
+                        if (agent._type == AgentType.SELLER and announcement_type == AnnouncementType.BUY) or 
+                        (agent._type == AgentType.BUYER and announcement_type == AnnouncementType.SELL)
+                    ]
+                    np.random.shuffle(potential_respondents)
 
                     # obtain a response to the announcement
                     logging.info("Prompting agents for a response to the announcement...")
-                    for j, responding_agent in enumerate(remaining_agents):
-                        if (responding_agent._type == AgentType.SELLER and announcement_type == AnnouncementType.BUY) or (responding_agent._type == AgentType.BUYER and announcement_type == AnnouncementType.SELL):
-                            response = responding_agent.respond(price, market_history, round, iteration)
-                            responding_agent.update_own_responding_history(price, round, iteration, accepted=response)
-                            responding_agent_id = responding_agent._id
-                            responding_agent_reservation_price = responding_agent._reservation_price
-                            # Save every response, not just the last one
-                            data_iterations.append({
-                                'round': round,
-                                'iteration': iteration,
-                                'price': price,
-                                'announcement': announcement_made,
-                                'transaction': response,
-                                'announcement_type': announcement_type.value,
-                                'announcing_agent_id': announcing_agent_id,
-                                'announcing_agent_reservation_price': announcing_agent_reservation_price,
-                                'responding_agent_id': responding_agent_id,
-                                'responding_agent_reservation_price': responding_agent_reservation_price
-                            })
-                            if response:
-                                # record and remove the dealing agents
-                                logging.info(f"An announcement to {announcement_type.value} for ${price} was accepted by agent {responding_agent._id} at iteration {iteration}.")
-                                for idx in sorted([i, j], reverse=True):
-                                    del remaining_agents[idx]
-                                transaction_made = True
-                                break
+                    for j, responding_agent in enumerate(potential_respondents):
+                        response = responding_agent.respond(price, market_history, round, iteration)
+                        responding_agent.update_own_responding_history(price, round, iteration, accepted=response)
+                        responding_agent_id = responding_agent._id
+                        responding_agent_reservation_price = responding_agent._reservation_price
+                        # Save every response, not just the last one
+                        data_iterations.append({
+                            'round': round,
+                            'iteration': iteration,
+                            'price': price,
+                            'announcement': announcement_made,
+                            'transaction': response,
+                            'announcement_type': announcement_type.value,
+                            'announcing_agent_id': announcing_agent_id,
+                            'announcing_agent_reservation_price': announcing_agent_reservation_price,
+                            'responding_agent_id': responding_agent_id,
+                            'responding_agent_reservation_price': responding_agent_reservation_price
+                        })
+                        if response:
+                            # record and remove the dealing agents
+                            logging.info(f"An announcement to {announcement_type.value} for ${price} was accepted by agent {responding_agent._id} at iteration {iteration}.")
+                            for idx in sorted([i, j], reverse=True):
+                                del remaining_agents[idx]
+                            transaction_made = True
+                            break
 
                     if transaction_made:
                         announcing_agent.update_own_announcement_history(price, round, iteration, accepted=True)

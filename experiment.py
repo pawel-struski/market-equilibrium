@@ -7,8 +7,7 @@ import logging
 import shutil
 import copy
 
-from llm_setup import act_gpt
-from utils import load_config, get_git_commit
+from utils import load_config, get_experiment_commit_hash
 from agent import (Agent, AgentType, AnnouncementType, AgentPromptConfig, 
                    AgentLLMConfig, GeneralPromptConfig, AgentPromptKeywords,
                    ExperimentConfig)
@@ -23,9 +22,15 @@ def main(config_name: str):
     exp_config_path = Path(__file__).parent.resolve() / experiment_config_path
     config = load_config(exp_config_path)
 
-    # Determine experiment name and timestamp
+    # Determine experiment timestamp and the commit hash of the latest change
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    commit_hash = get_git_commit()[:7]  # short hash for readability
+    relevant_paths = [
+        "experiment.py",
+        "llm_setup.py",
+        "agent.py",
+        "configs/"
+    ]
+    commit_hash = get_experiment_commit_hash(relevant_paths)[:7]
 
     # Create a unique results folder
     outdir = Path(__file__).parent.resolve() / "results" / f"{config_name}_{commit_hash}_{timestamp}"

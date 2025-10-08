@@ -1,4 +1,3 @@
-
 from dataclasses import dataclass
 from enum import Enum
 import logging
@@ -65,7 +64,7 @@ class AgentPromptConfig:
 class Agent:
     def __init__(self, id: int, reservation_price: float, type: AgentType, 
                  prompt_config: AgentPromptConfig, llm_config: AgentLLMConfig, 
-                 experiment_config: ExperimentConfig):
+                 experiment_config: ExperimentConfig, logger: logging.Logger = logging.getLogger()):
         self._id = id
         self._reservation_price = reservation_price
         self._type = type
@@ -75,6 +74,7 @@ class Agent:
         self.experiment_config = experiment_config
         self.own_history_prompt = ""
         self.own_history_data = []
+        self.logger = logger
 
     def _render_prompt(self, market_history: str, round: int, iteration: int, 
                       action_prompt: str) -> str:
@@ -98,13 +98,13 @@ class Agent:
         return prompt
     
     def generate_text_with_llm(self, prompt: str) -> str:
-        logging.info(f"{self._type.value.capitalize()} with id {self._id} calling the LLM with the prompt: \n{prompt}")
+        self.logger.info(f"{self._type.value.capitalize()} with id {self._id} calling the LLM with the prompt: \n{prompt}")
         llm_text = act_gpt(prompt, 
                            self.llm_config.model, 
                            self.llm_config.max_tokens, 
                            self.llm_config.temperature
         )
-        logging.info(f"LLM response: {llm_text}")
+        self.logger.info(f"LLM response: {llm_text}")
         return llm_text
 
     def respond(self, price: float, market_history: str, round: int, iteration: int) -> bool:

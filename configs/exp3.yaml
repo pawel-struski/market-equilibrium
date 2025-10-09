@@ -15,7 +15,7 @@ agent:
   llm:
     model: gpt-5-mini-2025-08-07
     max_tokens: 5
-    temperature: 0.0
+    temperature: 1.0
   prompts:
     general:
       main_template: |

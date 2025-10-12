@@ -24,7 +24,6 @@ class Outcome(Enum):
     REJECTED = 'rejected'
 
 
-#TODO: include all the experimental parameters here as well that agents know about
 @dataclass(frozen=True)
 class ExperimentConfig:
     N_ROUNDS: int

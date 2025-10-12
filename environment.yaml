@@ -1,0 +1,15 @@
+name: market-equilibrium
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.13.5
+  - pip=25.1
+  - numpy=2.3.2
+  - pandas=2.3.1
+  - matplotlib==3.10.3
+  - seaborn==0.13.2
+  - ipykernel=6.29.5
+  - pip:
+      - openai==1.97.1
+      - PyYAML==6.0.3

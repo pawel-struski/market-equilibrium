@@ -1,6 +1,7 @@
 experiment:
   n_rounds: 1
   n_iter: 3
+  n_sims: 2
   buyers_reservation_prices:
     min: 0.8
     max: 3.2

@@ -96,7 +96,7 @@ class Agent:
         prompt = self.prompt_config.general.main_template.format(**all_keys)
         return prompt
     
-    def generate_text_with_llm(self, prompt: str) -> str:
+    def _generate_text_with_llm(self, prompt: str) -> str:
         self.logger.info(f"{self._type.value.capitalize()} with id {self._id} calling the LLM with the prompt: \n{prompt}")
         llm_text = prompt_gpt(prompt, 
                               self.llm_config.model, 
@@ -109,14 +109,14 @@ class Agent:
     def respond(self, price: float, market_history: str, round: int, iteration: int) -> bool:
         action_prompt = self.prompt_config.response_prompt.format(price=price)
         prompt = self._render_prompt(market_history, round, iteration, action_prompt)
-        llm_text = self.generate_text_with_llm(prompt)
+        llm_text = self._generate_text_with_llm(prompt)
         response = self._extract_response(llm_text)
         return response
 
     def announce(self, market_history: str, round: int, iteration: int) -> float:
         action_prompt = self.prompt_config.announcement_prompt
         prompt = self._render_prompt(market_history, round, iteration, action_prompt)
-        llm_text = self.generate_text_with_llm(prompt)
+        llm_text = self._generate_text_with_llm(prompt)
         price = self._extract_price(llm_text)
         return price
 
@@ -129,7 +129,7 @@ class Agent:
             price=price,
             outcome=outcome.value
         )
-        self.update_own_history_data(round, iteration, Action.ANNOUNCE, price, accepted)
+        self._update_own_history_data(round, iteration, Action.ANNOUNCE, price, accepted)
 
     def update_own_responding_history(self, price: float, round: int, iteration: int, accepted: bool):
         outcome = Outcome.ACCEPTED if accepted else Outcome.REJECTED
@@ -144,9 +144,9 @@ class Agent:
             price=price,
             outcome=outcome.value
         )
-        self.update_own_history_data(round, iteration, Action.RESPOND, price, accepted)
+        self._update_own_history_data(round, iteration, Action.RESPOND, price, accepted)
 
-    def update_own_history_data(self, round: int, iteration: int, action: Action, price: float, accepted: bool):
+    def _update_own_history_data(self, round: int, iteration: int, action: Action, price: float, accepted: bool):
         outcome = Outcome.ACCEPTED if accepted else Outcome.REJECTED
         self.own_history_data.append({
             'round': round,

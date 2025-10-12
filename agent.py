@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from enum import Enum
 import logging
-from llm_setup import act_gpt
+from llm_setup import prompt_gpt
 
 
 class Action(Enum):
@@ -98,10 +98,10 @@ class Agent:
     
     def generate_text_with_llm(self, prompt: str) -> str:
         self.logger.info(f"{self._type.value.capitalize()} with id {self._id} calling the LLM with the prompt: \n{prompt}")
-        llm_text = act_gpt(prompt, 
-                           self.llm_config.model, 
-                           self.llm_config.max_tokens, 
-                           self.llm_config.temperature
+        llm_text = prompt_gpt(prompt, 
+                              self.llm_config.model, 
+                              self.llm_config.max_tokens, 
+                              self.llm_config.temperature
         )
         self.logger.info(f"LLM response: {llm_text}")
         return llm_text

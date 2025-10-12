@@ -1,12 +1,10 @@
-# from huggingface_hub import InferenceClient
 from openai import APIError, APIConnectionError, RateLimitError, Client, OpenAI
 import os
 import time
 
 
-######################################################################
-### GPT Setup
-######################################################################
+### OpenAI API Setup ####
+
 
 openai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 

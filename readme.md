@@ -20,7 +20,7 @@ Create a conda environment from the provided file.
 conda env create -f environment.yml
 ```
 
-Set an environment variable in your conda environment holding your OpenAI API key
+Set a variable in your conda environment holding your OpenAI API key
 and reload the environment.
 
 ```bash
@@ -33,14 +33,14 @@ conda activate market-equilibrium
 
 To run an experiment, run the `experiment.py` script with one argument indicating 
 the name of the config file to use. The config files control all the parameters of
-the experiment and are stored in the configs directory. Note that this will call
+the experiment and are stored in the `configs` directory. Note that this will call
 the OpenAI API which can incur costs. 
 
 ```bash
 python experiment.py exp2
 ```
 
-The script will produce a directory named `"{config_name}_{commit_hash}_{timestamp}"`, 
+The script will produce a directory `"results/{config_name}_{commit_hash}_{timestamp}"`, 
 which will contain all the results.
 
 ## Results

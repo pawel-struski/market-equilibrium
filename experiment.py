@@ -12,8 +12,6 @@ from agent import (Agent, AgentType, AnnouncementType, AgentPromptConfig,
                    AgentLLMConfig, GeneralPromptConfig, AgentPromptKeywords,
                    ExperimentConfig)
 
-# NOTE: the bid/offer terminology is very specific to finance, but maybe that is good
-
 
 def main(config_name: str):
 
@@ -211,7 +209,6 @@ def main(config_name: str):
         df_data_agents = pd.concat([df for df in agents_dfs]).reset_index(drop=True)
         agent_output_filename = data_path / f"agent_histories_{sim}.csv"
         df_data_agents.to_csv(agent_output_filename)
-        #TODO: save also some summary statistics e.g. convergence to equilibrium, number of successful transactions, etc. 
 
         logger.info("Simulation done.")
     

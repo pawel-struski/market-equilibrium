@@ -1,7 +1,8 @@
 # Competitive Market Behavior of LLMs
 
-This repository contains code for replicating a behavioural economic experiment
-where LLM-powered agents participate in a market.
+This repository contains code for replicating a behavioral economics experiment 
+in which LLM-powered agents participate in a competitive market. Please note that this is a 
+pilot study for a larger project and is still a work in progress.
 
 Note that this code requires an API key for OpenAI.
 

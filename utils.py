@@ -1,6 +1,5 @@
 import yaml
 import subprocess
-import logging
 import subprocess
 
 

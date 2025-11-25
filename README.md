@@ -11,7 +11,7 @@ Note that this code requires an API key for OpenAI.
 Clone the repository
 
 ```bash
-git clone https://github.com/your-username/market-equilibrium.git
+git clone https://github.com/pawel-struski/market-equilibrium.git
 cd market-equilibrium
 ```
 

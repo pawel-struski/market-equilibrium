@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from enum import Enum
 import logging
+from langchain_community.callbacks import get_openai_callback
 from llm_setup import prompt_gpt
 
 
@@ -83,6 +84,7 @@ class Agent:
         self.own_history_prompt = ""
         self.own_history_data = []
         self.logger = logger
+        self.total_cost = 0.0
 
     def _render_prompt(
         self, market_history: str, round: int, iteration: int, action_prompt: str
@@ -112,13 +114,20 @@ class Agent:
         self.logger.info(
             f"{self._type.value.capitalize()} with id {self._id} calling the LLM with the prompt: \n{prompt}"
         )
-        llm_text = prompt_gpt(
-            prompt,
-            self.llm_config.model,
-            self.llm_config.max_tokens,
-            self.llm_config.temperature,
-        )
+        with get_openai_callback() as cb:
+            llm_text = prompt_gpt(
+                prompt,
+                self.llm_config.model,
+                self.llm_config.max_tokens,
+                self.llm_config.temperature,
+            )
+        self.total_cost += cb.total_cost
         self.logger.info(f"LLM response: {llm_text}")
+        self.logger.info(f"Prompt tokens:     {cb.prompt_tokens}")
+        self.logger.info(f"Completion tokens: {cb.completion_tokens}")
+        self.logger.info(f"Total tokens:      {cb.total_tokens}")
+        self.logger.info(f"Call cost (USD):   {cb.total_cost:.6f}")
+        self.logger.info(f"Total session cost (USD): {self.total_cost:.6f}")
         return llm_text
 
     def respond(

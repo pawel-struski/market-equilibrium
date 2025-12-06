@@ -1,8 +1,28 @@
 from openai import APIError, APIConnectionError, RateLimitError
 import time
+import logging
+from contextlib import contextmanager
 
 from langchain_openai import ChatOpenAI
+from langchain_community.callbacks.openai_info import OpenAICallbackHandler
+from langchain_community.callbacks.manager import openai_callback_var
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+
+logger = logging.getLogger(__name__)
+
+
+class CostCallbackHandler(OpenAICallbackHandler):
+    def __init__(self, logger=None):
+        super().__init__()
+        self.model_name = None
+        self.logger = logger or logging.getLogger(__name__)
+
+
+@contextmanager
+def get_llm_callback(logger=None):
+    cb = CostCallbackHandler(logger=logger)
+    yield cb
 
 
 def _to_langchain_messages(messages):
@@ -37,6 +57,7 @@ def api_request_with_retry(
     max_retries: int = 5,
     base_delay: float = 1.0,
     backoff_factor: float = 2.0,
+    callbacks=None,
 ):
     """
     Send a request to the OpenAI API via LangChain's ChatOpenAI
@@ -50,6 +71,7 @@ def api_request_with_retry(
         max_retries (int, optional): Max number of retry attempts. Default 5.
         base_delay (float, optional): Initial delay between retries in seconds. Default 1.0.
         backoff_factor (float, optional): Exponential backoff multiplier. Default 2.0.
+        callbacks (list, optional): List of callbacks to pass to the LLM.
 
     Returns:
         LangChain AIMessage with the model's response.
@@ -58,11 +80,17 @@ def api_request_with_retry(
         Exception: If all retry attempts fail.
     """
 
-    llm = ChatOpenAI(
-        model=model,
-        temperature=temperature,
-        # max_retries=0, # TODO
-    )
+    if "gemini" in model.lower():
+        llm = ChatGoogleGenerativeAI(
+            model=model,
+            temperature=temperature,
+        )
+    else:
+        llm = ChatOpenAI(
+            model=model,
+            temperature=temperature,
+            # max_retries=0, # TODO
+        )
 
     lc_messages = _to_langchain_messages(messages)
 
@@ -70,11 +98,21 @@ def api_request_with_retry(
 
     for attempt in range(1, max_retries + 1):
         try:
-            return llm.invoke(lc_messages, max_tokens=max_tokens)
+            return llm.invoke(
+                lc_messages, config={"callbacks": callbacks}, max_tokens=max_tokens
+            )
         except (APIError, APIConnectionError, RateLimitError) as e:
             last_error = e
             print(f"Attempt {attempt}/{max_retries} failed: {e}")
 
+            if attempt < max_retries:
+                delay = base_delay * (backoff_factor ** (attempt - 1))
+                print(f"Retrying in {delay:.1f} seconds...")
+                time.sleep(delay)
+        except Exception as e:
+            # Catch other errors (e.g. from Gemini)
+            last_error = e
+            print(f"Attempt {attempt}/{max_retries} failed: {e}")
             if attempt < max_retries:
                 delay = base_delay * (backoff_factor ** (attempt - 1))
                 print(f"Retrying in {delay:.1f} seconds...")
@@ -85,7 +123,9 @@ def api_request_with_retry(
     )
 
 
-def prompt_gpt(text: str, model: str, max_tokens: int, temperature: float) -> str:
+def prompt_gpt(
+    text: str, model: str, max_tokens: int, temperature: float, callbacks=None
+) -> str:
     """
     Sends a text prompt to the GPT model and returns the response text
     using LangChain's ChatOpenAI under the hood.
@@ -97,6 +137,7 @@ def prompt_gpt(text: str, model: str, max_tokens: int, temperature: float) -> st
         max_tokens=max_tokens,
         temperature=temperature,
         messages=messages,
+        callbacks=callbacks,
     )
 
     return response.content

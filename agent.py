@@ -1,8 +1,11 @@
 from dataclasses import dataclass
 from enum import Enum
 import logging
-from langchain_community.callbacks import get_openai_callback
-from llm_setup import prompt_gpt
+from llm_setup import prompt_gpt, get_llm_callback
+
+total_cost = 0.0
+total_input_tokens = 0
+total_output_tokens = 0
 
 
 class Action(Enum):
@@ -84,7 +87,6 @@ class Agent:
         self.own_history_prompt = ""
         self.own_history_data = []
         self.logger = logger
-        self.total_cost = 0.0
 
     def _render_prompt(
         self, market_history: str, round: int, iteration: int, action_prompt: str
@@ -111,23 +113,30 @@ class Agent:
         return prompt
 
     def _generate_text_with_llm(self, prompt: str) -> str:
+        global total_cost, total_input_tokens, total_output_tokens
         self.logger.info(
             f"{self._type.value.capitalize()} with id {self._id} calling the LLM with the prompt: \n{prompt}"
         )
-        with get_openai_callback() as cb:
+        with get_llm_callback(logger=self.logger) as cb:
+            cb.model_name = self.llm_config.model
             llm_text = prompt_gpt(
                 prompt,
                 self.llm_config.model,
                 self.llm_config.max_tokens,
                 self.llm_config.temperature,
+                callbacks=[cb],
             )
-        self.total_cost += cb.total_cost
+        total_cost += cb.total_cost
+        total_input_tokens += cb.prompt_tokens
+        total_output_tokens += cb.completion_tokens
         self.logger.info(f"LLM response: {llm_text}")
         self.logger.info(f"Prompt tokens:     {cb.prompt_tokens}")
         self.logger.info(f"Completion tokens: {cb.completion_tokens}")
         self.logger.info(f"Total tokens:      {cb.total_tokens}")
         self.logger.info(f"Call cost (USD):   {cb.total_cost:.6f}")
-        self.logger.info(f"Total session cost (USD): {self.total_cost:.6f}")
+        self.logger.info(f"Total session cost (USD): {total_cost:.6f}")
+        self.logger.info(f"Total session input tokens: {total_input_tokens}")
+        self.logger.info(f"Total session output tokens: {total_output_tokens}")
         return llm_text
 
     def respond(
